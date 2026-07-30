@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package pawmates.payments;
+
+// Mirrors "Contratos gRPC internos" (API Design doc, Sheet 4, §08).
+service PaymentsService {
+  rpc AuthorizePayment(AuthorizePaymentRequest) returns (AuthorizePaymentResponse);
+  rpc CapturePayment(CapturePaymentRequest) returns (CapturePaymentResponse);
+}
+
+message AuthorizePaymentRequest {
+  string booking_id = 1;
+  int64 amount = 2; // minor currency unit
+  string currency = 3;
+  string payment_method_id = 4;
+  string idempotency_key = 5;
+}
+
+message AuthorizePaymentResponse {
+  string transaction_id = 1;
+  string status = 2; // authorized | failed
+}
+
+message CapturePaymentRequest {
+  string transaction_id = 1;
+  int64 final_amount = 2;
+}
+
+message CapturePaymentResponse {
+  string status = 1; // captured | failed
+}

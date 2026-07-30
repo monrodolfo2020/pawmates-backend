@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/apps/trust-safety-svc",
+    "tsBuildInfoFile": "../../dist/apps/trust-safety-svc/tsconfig.app.tsbuildinfo",
+    "rootDir": "../.."
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "**/*.spec.ts"
+  ]
+}

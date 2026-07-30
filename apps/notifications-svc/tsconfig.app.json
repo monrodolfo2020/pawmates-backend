@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/apps/notifications-svc",
+    "tsBuildInfoFile": "../../dist/apps/notifications-svc/tsconfig.app.tsbuildinfo",
+    "rootDir": "../.."
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "**/*.spec.ts"
+  ]
+}

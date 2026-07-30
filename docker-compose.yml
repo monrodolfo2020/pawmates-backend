@@ -1,0 +1,283 @@
+name: pawmates-backend
+
+x-service-defaults: &service-defaults
+  build:
+    context: .
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    redpanda:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: pawmates
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Single-node Redpanda: a Kafka-API-compatible broker with no Zookeeper
+  # and a much lighter footprint — every service here talks to it purely
+  # via kafkajs, so nothing needs to know it isn't "real" Kafka.
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=1G
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    ports:
+      - '9092:9092'
+    healthcheck:
+      test: ['CMD-SHELL', 'rpk cluster health | grep -q "Healthy:.*true"']
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  # One-shot: runs booking-svc's migration then exits. booking-svc waits
+  # on it via `service_completed_successfully` so it never boots against
+  # an empty `booking` schema.
+  booking-svc-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: booking-svc
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: pawmates
+    entrypoint: ['npx', 'ts-node', '-r', 'tsconfig-paths/register', './node_modules/typeorm/cli.js', 'migration:run', '-d', 'apps/booking-svc/src/infra/persistence/data-source.ts']
+
+  identity-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: identity-svc
+    ports:
+      - '3001:3001'
+    environment:
+      PORT: 3001
+
+  trust-safety-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: trust-safety-svc
+    ports:
+      - '3002:3002'
+      - '50053:50053'
+    environment:
+      PORT: 3002
+      GRPC_PORT: 50053
+
+  pets-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: pets-svc
+    ports:
+      - '3003:3003'
+    environment:
+      PORT: 3003
+
+  marketplace-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: marketplace-svc
+    ports:
+      - '3004:3004'
+      - '50052:50052'
+    environment:
+      PORT: 3004
+      GRPC_PORT: 50052
+
+  booking-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: booking-svc
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      booking-svc-migrate:
+        condition: service_completed_successfully
+    ports:
+      - '3005:3005'
+    environment:
+      PORT: 3005
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: pawmates
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: redpanda:9092
+      JWT_SECRET: dev-secret-change-me
+      MARKETPLACE_GRPC_URL: marketplace-svc:50052
+      TRUST_SAFETY_GRPC_URL: trust-safety-svc:50053
+      PAYMENTS_GRPC_URL: payments-svc:50054
+
+  payments-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: payments-svc
+    ports:
+      - '3006:3006'
+      - '50054:50054'
+    environment:
+      PORT: 3006
+      GRPC_PORT: 50054
+
+  gps-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: gps-svc
+    ports:
+      - '3007:3007'
+    environment:
+      PORT: 3007
+      KAFKA_BROKERS: redpanda:9092
+
+  messaging-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: messaging-svc
+    ports:
+      - '3008:3008'
+    environment:
+      PORT: 3008
+
+  reviews-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: reviews-svc
+    ports:
+      - '3009:3009'
+    environment:
+      PORT: 3009
+
+  notifications-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: notifications-svc
+    ports:
+      - '3010:3010'
+    environment:
+      PORT: 3010
+
+  support-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: support-svc
+    ports:
+      - '3011:3011'
+    environment:
+      PORT: 3011
+
+  marketing-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: marketing-svc
+    ports:
+      - '3012:3012'
+    environment:
+      PORT: 3012
+
+  analytics-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: analytics-svc
+    ports:
+      - '3013:3013'
+    environment:
+      PORT: 3013
+
+  admin-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: admin-svc
+    ports:
+      - '3014:3014'
+    environment:
+      PORT: 3014
+
+volumes:
+  postgres-data:

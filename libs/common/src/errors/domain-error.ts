@@ -1,0 +1,60 @@
+/**
+ * Base of every domain-level error. `code` and `retryable` map straight
+ * onto the error envelope defined in the API Design doc (Sheet 4, §11):
+ * { error: { code, message, retryable } }.
+ */
+export abstract class DomainError extends Error {
+  abstract readonly code: string;
+  abstract readonly httpStatus: number;
+  abstract readonly retryable: boolean;
+}
+
+export class ValidationError extends DomainError {
+  readonly code = 'validation.invalid_field';
+  readonly httpStatus = 400;
+  readonly retryable = false;
+}
+
+export class ResourceNotFoundError extends DomainError {
+  readonly code = 'resource.not_found';
+  readonly httpStatus = 404;
+  readonly retryable = false;
+}
+
+export class TrustSafetyVerificationRequiredError extends DomainError {
+  readonly code = 'trust_safety.verification_required';
+  readonly httpStatus = 403;
+  readonly retryable = false;
+}
+
+/** Policy P-14 / P-17 — no double booking. */
+export class BookingProviderDoubleBookedError extends DomainError {
+  readonly code = 'booking.provider_double_booked';
+  readonly httpStatus = 409;
+  readonly retryable = false;
+}
+
+/** Policy P-15 — no cancelling after the service has started. */
+export class BookingCannotCancelInProgressError extends DomainError {
+  readonly code = 'booking.cannot_cancel_in_progress';
+  readonly httpStatus = 409;
+  readonly retryable = false;
+}
+
+export class BookingNotEligibleForReviewError extends DomainError {
+  readonly code = 'reviews.not_eligible';
+  readonly httpStatus = 409;
+  readonly retryable = false;
+}
+
+export class PaymentCardDeclinedError extends DomainError {
+  readonly code = 'payments.card_declined';
+  readonly httpStatus = 422;
+  readonly retryable = true;
+}
+
+export class DependencyUnavailableError extends DomainError {
+  readonly code = 'dependency.unavailable';
+  readonly httpStatus = 503;
+  readonly retryable = true;
+}

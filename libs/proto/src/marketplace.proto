@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package pawmates.marketplace;
+
+// Mirrors "Contratos gRPC internos" (API Design doc, Sheet 4, §08).
+service MarketplaceService {
+  rpc CheckAvailability(CheckAvailabilityRequest) returns (CheckAvailabilityResponse);
+}
+
+message CheckAvailabilityRequest {
+  string provider_service_id = 1;
+  string scheduled_at = 2; // ISO-8601
+  int32 duration_minutes = 3;
+}
+
+message PriceBreakdown {
+  int64 rate_amount = 1;       // minor currency unit
+  int64 commission_amount = 2;
+  int64 tax_amount = 3;
+  int64 tip_estimate = 4;
+  int64 total_amount = 5;
+  string currency = 6;
+}
+
+message CheckAvailabilityResponse {
+  bool available = 1;
+  PriceBreakdown price_breakdown = 2;
+  string provider_id = 3;
+}
