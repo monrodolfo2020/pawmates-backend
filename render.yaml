@@ -70,9 +70,16 @@ services:
     dockerContext: .
     plan: free
     healthCheckPath: /health
-    preDeployCommand: >-
-      npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js
-      migration:run -d apps/booking-svc/src/infra/persistence/data-source.ts
+    # Free plan doesn't support Pre-Deploy Command, so the migration runs as
+    # part of the container's own startup instead — safe to repeat on every
+    # boot (TypeORM skips already-applied migrations), which also covers
+    # free-tier spin-down/wake cycles that a one-time pre-deploy step
+    # wouldn't.
+    dockerCommand: >-
+      sh -c "npx ts-node -r tsconfig-paths/register
+      ./node_modules/typeorm/cli.js migration:run -d
+      apps/booking-svc/src/infra/persistence/data-source.ts &&
+      node dist/apps/booking-svc/apps/booking-svc/src/main.js"
     envVars:
       - key: APP_NAME
         value: booking-svc
@@ -114,9 +121,12 @@ services:
     dockerContext: .
     plan: free
     healthCheckPath: /health
-    preDeployCommand: >-
-      npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js
-      migration:run -d apps/commerce-svc/src/infra/persistence/data-source.ts
+    # See booking-svc's dockerCommand comment above — same reason.
+    dockerCommand: >-
+      sh -c "npx ts-node -r tsconfig-paths/register
+      ./node_modules/typeorm/cli.js migration:run -d
+      apps/commerce-svc/src/infra/persistence/data-source.ts &&
+      node dist/apps/commerce-svc/apps/commerce-svc/src/main.js"
     envVars:
       - key: APP_NAME
         value: commerce-svc
