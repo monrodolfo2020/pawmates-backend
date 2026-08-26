@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/apps/pawmates-api",
+    "tsBuildInfoFile": "../../dist/apps/pawmates-api/tsconfig.app.tsbuildinfo",
+    "rootDir": "../.."
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "**/*.spec.ts"
+  ]
+}

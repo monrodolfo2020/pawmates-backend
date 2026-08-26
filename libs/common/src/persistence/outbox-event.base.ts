@@ -1,11 +1,12 @@
 import { Column, CreateDateColumn, PrimaryColumn } from 'typeorm';
 
 /**
- * Transactional Outbox base (Architecture doc §09, Data Model doc
- * Convención 05). Every service that publishes domain events extends this
- * in its own schema — INSERTed in the same DB transaction as the
- * aggregate write, drained by that service's OutboxRelay. Never updated
- * except to flip `dispatchedAt` once Kafka acks the publish.
+ * Domain event log (Data Model doc Convención 05's Transactional Outbox,
+ * kept as an audit trail even without a broker to drain it into — see
+ * README's "Consolidated MVP" section). Every aggregate write that used to
+ * publish a domain event still INSERTs one of these in the same DB
+ * transaction; nothing reads them back out today, but the shape stays
+ * exactly what a real relay-to-broker job would need if one gets added.
  */
 export abstract class OutboxEventBase {
   // A ULID (Data Model doc §13's "ordenable por tiempo" ID convention),
@@ -17,21 +18,18 @@ export abstract class OutboxEventBase {
   @Column({ type: 'text' })
   topic!: string;
 
-  @Column({ type: 'text' })
+  @Column({ name: 'event_type', type: 'text' })
   eventType!: string;
 
-  @Column({ type: 'text' })
+  @Column({ name: 'partition_key', type: 'text' })
   partitionKey!: string;
 
   @Column({ type: 'jsonb' })
   payload!: Record<string, unknown>;
 
-  @Column({ type: 'text' })
+  @Column({ name: 'trace_id', type: 'text' })
   traceId!: string;
 
-  @CreateDateColumn({ type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
-
-  @Column({ type: 'timestamptz', nullable: true })
-  dispatchedAt!: Date | null;
 }

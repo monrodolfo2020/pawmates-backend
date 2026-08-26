@@ -1,148 +1,22 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
-  "sourceRoot": "apps/booking-svc/src",
+  "sourceRoot": "apps/pawmates-api/src",
   "monorepo": true,
-  "root": "apps/booking-svc",
+  "root": "apps/pawmates-api",
   "compilerOptions": {
     "webpack": false,
-    "tsConfigPath": "apps/booking-svc/tsconfig.app.json",
+    "tsConfigPath": "apps/pawmates-api/tsconfig.app.json",
     "deleteOutDir": true
   },
   "projects": {
-    "identity-svc": {
+    "pawmates-api": {
       "type": "application",
-      "root": "apps/identity-svc",
+      "root": "apps/pawmates-api",
       "entryFile": "main",
-      "sourceRoot": "apps/identity-svc/src",
+      "sourceRoot": "apps/pawmates-api/src",
       "compilerOptions": {
-        "tsConfigPath": "apps/identity-svc/tsconfig.app.json"
-      }
-    },
-    "trust-safety-svc": {
-      "type": "application",
-      "root": "apps/trust-safety-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/trust-safety-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/trust-safety-svc/tsconfig.app.json"
-      }
-    },
-    "pets-svc": {
-      "type": "application",
-      "root": "apps/pets-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/pets-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/pets-svc/tsconfig.app.json"
-      }
-    },
-    "marketplace-svc": {
-      "type": "application",
-      "root": "apps/marketplace-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/marketplace-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/marketplace-svc/tsconfig.app.json"
-      }
-    },
-    "booking-svc": {
-      "type": "application",
-      "root": "apps/booking-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/booking-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/booking-svc/tsconfig.app.json"
-      }
-    },
-    "payments-svc": {
-      "type": "application",
-      "root": "apps/payments-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/payments-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/payments-svc/tsconfig.app.json"
-      }
-    },
-    "gps-svc": {
-      "type": "application",
-      "root": "apps/gps-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/gps-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/gps-svc/tsconfig.app.json"
-      }
-    },
-    "messaging-svc": {
-      "type": "application",
-      "root": "apps/messaging-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/messaging-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/messaging-svc/tsconfig.app.json"
-      }
-    },
-    "reviews-svc": {
-      "type": "application",
-      "root": "apps/reviews-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/reviews-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/reviews-svc/tsconfig.app.json"
-      }
-    },
-    "notifications-svc": {
-      "type": "application",
-      "root": "apps/notifications-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/notifications-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/notifications-svc/tsconfig.app.json"
-      }
-    },
-    "support-svc": {
-      "type": "application",
-      "root": "apps/support-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/support-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/support-svc/tsconfig.app.json"
-      }
-    },
-    "marketing-svc": {
-      "type": "application",
-      "root": "apps/marketing-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/marketing-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/marketing-svc/tsconfig.app.json"
-      }
-    },
-    "analytics-svc": {
-      "type": "application",
-      "root": "apps/analytics-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/analytics-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/analytics-svc/tsconfig.app.json"
-      }
-    },
-    "admin-svc": {
-      "type": "application",
-      "root": "apps/admin-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/admin-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/admin-svc/tsconfig.app.json"
-      }
-    },
-    "commerce-svc": {
-      "type": "application",
-      "root": "apps/commerce-svc",
-      "entryFile": "main",
-      "sourceRoot": "apps/commerce-svc/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/commerce-svc/tsconfig.app.json"
+        "tsConfigPath": "apps/pawmates-api/tsconfig.app.json"
       }
     },
     "common": {
@@ -152,15 +26,6 @@
       "sourceRoot": "libs/common/src",
       "compilerOptions": {
         "tsConfigPath": "libs/common/tsconfig.lib.json"
-      }
-    },
-    "proto": {
-      "type": "library",
-      "root": "libs/proto",
-      "entryFile": "index",
-      "sourceRoot": "libs/proto/src",
-      "compilerOptions": {
-        "tsConfigPath": "libs/proto/tsconfig.lib.json"
       }
     }
   }
