@@ -22,22 +22,29 @@
 # network (e.g. `trust-safety-svc:50053`), the same convention
 # docker-compose.yml uses locally — see the Dockerfile's comment for why
 # no service needs its own build args anymore.
+#
+# Plans: everything is `free` except `redpanda` (`starter`, ~$7/mo) — see
+# DEPLOY.md's Cost section for why, and for the free-tier Postgres
+# expiration caveat.
 
 databases:
   - name: pawmates-db
     databaseName: pawmates
     user: pawmates
-    plan: starter
+    plan: free
     postgresMajorVersion: '16'
 
 services:
   - type: redis
     name: pawmates-redis
-    plan: starter
+    plan: free
     ipAllowList: [] # private-network only, no public access
 
   # No managed Kafka on Render — runs Redpanda's own public image directly
   # (not this repo's Dockerfile) as a private, non-internet-facing service.
+  # Kept on `starter`, not `free`: the outbox relay and Kafka consumers need
+  # a broker that's always reachable, not one that spins down on idle — the
+  # one real recurring cost in this Blueprint (~$7/mo), everything else free.
   - type: pserv
     name: redpanda
     runtime: image
@@ -61,7 +68,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     preDeployCommand: >-
       npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js
@@ -105,7 +112,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     preDeployCommand: >-
       npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js
@@ -149,7 +156,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -164,7 +171,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -179,7 +186,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -196,7 +203,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -213,7 +220,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -226,7 +233,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -239,7 +246,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -252,7 +259,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -265,7 +272,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -278,7 +285,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -291,7 +298,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -304,7 +311,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME
@@ -317,7 +324,7 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /health
     envVars:
       - key: APP_NAME

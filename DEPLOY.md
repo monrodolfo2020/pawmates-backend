@@ -8,6 +8,23 @@ has no managed Kafka offering).
 **This file was written without live access to Render's current docs** —
 verify it against Render's own validation before trusting it blindly.
 
+## Cost
+
+Everything is on Render's **free** plan except one resource:
+
+- **`redpanda` is on `starter`** (~$7/mo) — the outbox relay and Kafka
+  consumers need a broker that's always reachable, not one that spins
+  down on idle the way free web services do. This is the one real
+  recurring cost in this Blueprint.
+- The 15 web services, Postgres, and Redis are all `free`. Two real
+  consequences of that:
+  - Free web services spin down after inactivity and cold-start on the
+    next request — fine for a demo, not for anything latency-sensitive.
+  - **Render's free Postgres is deleted after a fixed expiration window**
+    (historically ~30-90 days) unless upgraded. If this is meant to carry
+    real data, upgrade `pawmates-db`'s plan before that happens — don't
+    find out by losing the database.
+
 ## Steps
 
 1. Push this repo to GitHub (see the main README's Setup section for local
