@@ -53,10 +53,10 @@ services:
       --overprovisioned --node-id=0 --check=false
       --kafka-addr=PLAINTEXT://0.0.0.0:9092
       --advertise-kafka-addr=PLAINTEXT://redpanda:9092
-    disk:
-      name: redpanda-data
-      mountPath: /var/lib/redpanda/data
-      sizeGB: 10
+    # No persistent disk either — not supported on `free`. Redpanda's data
+    # dir lives on the container's ephemeral filesystem, so every event
+    # still undelivered at a restart/redeploy is lost. Acceptable for a
+    # reference deployment; not for anything that can't tolerate that.
 
   # --- Full implementation (real domain/persistence layers) ---
 

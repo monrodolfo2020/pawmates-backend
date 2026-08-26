@@ -8,9 +8,9 @@ has no managed Kafka offering).
 **This file was originally written without live access to Render's current
 docs.** Render's Blueprint preview has since validated it end to end — the
 `fromDatabase` properties and `redpanda`'s `runtime: image` block (the two
-things flagged as uncertain) both came back clean. The one real issue it
-caught: `preDeployCommand` isn't available on the `free` plan, fixed below
-by folding the migration into each service's own startup command instead.
+things flagged as uncertain) both came back clean. Two real issues it did
+catch, both about the `free` plan specifically (fixed below): it doesn't
+support `preDeployCommand`, and it doesn't support persistent disks.
 
 ## Cost
 
@@ -32,6 +32,10 @@ Blueprint. Three real consequences of that:
   (historically ~30-90 days) unless upgraded. If this is meant to carry
   real data, upgrade `pawmates-db`'s plan before that happens — don't
   find out by losing the database.
+- **Redpanda has no persistent disk** (also unsupported on `free`) — its
+  data dir lives on the container's ephemeral filesystem, so any event not
+  yet delivered when it restarts/redeploys is lost. Fine for a reference
+  deployment; `plan: starter` would also be needed to attach a real disk.
 
 ## Steps
 
@@ -62,8 +66,6 @@ Blueprint. Three real consequences of that:
   production deployment would put most of these behind a gateway/BFF and
   make the rest private (Render's `pserv` type) — that's Architecture-doc
   territory this repo hasn't built yet.
-- **Redpanda's persistence** uses a single Render disk with no replication
-  — fine for a reference deployment, not for anything carrying real data.
 - **Secrets**: `JWT_SECRET` is the same `dev-secret-change-me` literal
   `docker-compose.yml` uses locally (not a Render-generated per-service
   secret — every `JwtAuthGuard` needs to verify tokens against the same
