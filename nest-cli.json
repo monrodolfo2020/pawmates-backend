@@ -136,6 +136,15 @@
         "tsConfigPath": "apps/admin-svc/tsconfig.app.json"
       }
     },
+    "commerce-svc": {
+      "type": "application",
+      "root": "apps/commerce-svc",
+      "entryFile": "main",
+      "sourceRoot": "apps/commerce-svc/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/commerce-svc/tsconfig.app.json"
+      }
+    },
     "common": {
       "type": "library",
       "root": "libs/common",

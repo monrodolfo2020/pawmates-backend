@@ -69,6 +69,28 @@ export interface CapturePaymentResponse {
   status: 'captured' | 'failed';
 }
 
+export interface ChargeOrderRequest {
+  orderId: string;
+  amount: number;
+  currency: string;
+  paymentMethodId: string;
+  idempotencyKey: string;
+}
+
+export interface ChargeOrderResponse {
+  transactionId: string;
+  status: 'captured' | 'failed';
+}
+
+export interface RefundOrderRequest {
+  transactionId: string;
+  amount: number;
+}
+
+export interface RefundOrderResponse {
+  status: 'refunded' | 'failed';
+}
+
 export interface PaymentsServiceClient {
   authorizePayment(
     request: AuthorizePaymentRequest,
@@ -76,4 +98,23 @@ export interface PaymentsServiceClient {
   capturePayment(
     request: CapturePaymentRequest,
   ): Observable<CapturePaymentResponse>;
+  chargeOrder(request: ChargeOrderRequest): Observable<ChargeOrderResponse>;
+  refundOrder(request: RefundOrderRequest): Observable<RefundOrderResponse>;
+}
+
+export interface GetUpcomingConfirmedBookingRequest {
+  ownerId: string;
+  providerId: string;
+}
+
+export interface GetUpcomingConfirmedBookingResponse {
+  found: boolean;
+  bookingId: string;
+  scheduledAt: string;
+}
+
+export interface BookingServiceClient {
+  getUpcomingConfirmedBooking(
+    request: GetUpcomingConfirmedBookingRequest,
+  ): Observable<GetUpcomingConfirmedBookingResponse>;
 }

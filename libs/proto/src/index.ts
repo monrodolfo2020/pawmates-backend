@@ -16,4 +16,5 @@ export const PROTO_PACKAGES = {
   marketplace: 'pawmates.marketplace',
   trustSafety: 'pawmates.trust_safety',
   payments: 'pawmates.payments',
+  booking: 'pawmates.booking',
 } as const;

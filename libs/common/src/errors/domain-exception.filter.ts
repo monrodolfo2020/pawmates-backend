@@ -72,6 +72,12 @@ function defaultMessageFor(code: string): string {
       'Este proveedor no tiene el nivel de verificación requerido.',
     'resource.not_found': 'No encontramos lo que buscas.',
     'validation.invalid_field': 'Revisa los datos enviados.',
+    'commerce.insufficient_stock':
+      'Ya no hay suficiente stock de este producto.',
+    'commerce.delivery_not_ready':
+      'Aún no puedes confirmar la entrega — el paseo todavía no termina.',
+    'commerce.no_upcoming_booking':
+      'Todavía no tienes un paseo agendado con este paseador.',
   };
   return messages[code] ?? 'Ocurrió un error.';
 }

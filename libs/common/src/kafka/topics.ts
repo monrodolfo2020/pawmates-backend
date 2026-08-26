@@ -18,6 +18,7 @@ export const KAFKA_TOPICS = {
   marketing: 'marketing.events',
   analytics: 'analytics.events',
   admin: 'admin.events',
+  commerce: 'commerce.events',
 } as const;
 
 export type KafkaTopic = (typeof KAFKA_TOPICS)[keyof typeof KAFKA_TOPICS];

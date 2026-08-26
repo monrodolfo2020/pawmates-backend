@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/apps/commerce-svc",
+    "tsBuildInfoFile": "../../dist/apps/commerce-svc/tsconfig.app.tsbuildinfo",
+    "rootDir": "../.."
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "**/*.spec.ts"
+  ]
+}

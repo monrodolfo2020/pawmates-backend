@@ -5,6 +5,10 @@ import type {
   AuthorizePaymentResponse,
   CapturePaymentRequest,
   CapturePaymentResponse,
+  ChargeOrderRequest,
+  ChargeOrderResponse,
+  RefundOrderRequest,
+  RefundOrderResponse,
 } from '@pawmates/proto';
 import { ulid } from 'ulid';
 
@@ -25,5 +29,17 @@ export class PaymentsGrpcController {
   @GrpcMethod('PaymentsService', 'CapturePayment')
   capturePayment(_data: CapturePaymentRequest): CapturePaymentResponse {
     return { status: 'captured' };
+  }
+
+  // PawMates Commerce (Prompt 5 follow-up) — commerce-svc charges an Order
+  // in full at checkout rather than authorize-then-capture (see payments.proto).
+  @GrpcMethod('PaymentsService', 'ChargeOrder')
+  chargeOrder(_data: ChargeOrderRequest): ChargeOrderResponse {
+    return { transactionId: ulid().toLowerCase(), status: 'captured' };
+  }
+
+  @GrpcMethod('PaymentsService', 'RefundOrder')
+  refundOrder(_data: RefundOrderRequest): RefundOrderResponse {
+    return { status: 'refunded' };
   }
 }

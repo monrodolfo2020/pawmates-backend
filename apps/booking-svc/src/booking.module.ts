@@ -5,6 +5,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BookingController } from './api/booking.controller';
+import { BookingGrpcController } from './api/booking.grpc-controller';
 import { Booking } from './domain/entities/booking.entity';
 import { BookingLine } from './domain/entities/booking-line.entity';
 import { CancellationRecord } from './domain/entities/cancellation-record.entity';
@@ -55,7 +56,7 @@ import { RedisProvider } from './infra/redis.provider';
     ]),
     GrpcClientsModule,
   ],
-  controllers: [BookingController],
+  controllers: [BookingController, BookingGrpcController],
   providers: [
     BookingProcessManager,
     NoDoubleBookingPolicy,

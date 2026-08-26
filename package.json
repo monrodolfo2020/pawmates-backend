@@ -8,14 +8,18 @@
   "scripts": {
     "build": "node scripts/build-all.js",
     "build:booking-svc": "nest build booking-svc",
+    "build:commerce-svc": "nest build commerce-svc",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "start:booking-svc": "nest start booking-svc",
     "start:booking-svc:dev": "nest start booking-svc --watch",
+    "start:commerce-svc": "nest start commerce-svc",
+    "start:commerce-svc:dev": "nest start commerce-svc --watch",
     "lint": "eslint \"{apps,libs}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "migration:run:booking-svc": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d apps/booking-svc/src/infra/persistence/data-source.ts"
+    "migration:run:booking-svc": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d apps/booking-svc/src/infra/persistence/data-source.ts",
+    "migration:run:commerce-svc": "ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js migration:run -d apps/commerce-svc/src/infra/persistence/data-source.ts"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.12.5",

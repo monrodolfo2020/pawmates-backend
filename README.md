@@ -16,6 +16,17 @@ the two REST endpoints that drive the walk lifecycle
 (`POST /v1/trips/:bookingId/start|complete`) and publishes the
 corresponding Kafka events. The remaining 9 are health-check-only stubs.
 
+**PawMates Commerce (Prompt 5 follow-up):** `commerce-svc` is a 15th,
+fully-implemented service — walkers get their own storefront to sell
+products (treats, toys, accessories, service add-ons), delivered on the
+owner's next walk rather than shipped. It follows the same discipline as
+`booking-svc` (hexagonal ports, its own saga, transactional outbox), and
+adds `booking-svc`'s one inbound gRPC method
+(`BookingService.GetUpcomingConfirmedBooking`) plus two new
+`PaymentsService` stub methods (`ChargeOrder` / `RefundOrder`, pay-in-full
+at checkout rather than authorize-then-capture). See
+[Architecture (commerce-svc)](#architecture-commerce-svc) below.
+
 ## Why booking-svc
 
 Booking sits at the center of every other context (Marketplace,
@@ -33,7 +44,7 @@ actually exercises those patterns.
 | trust-safety-svc | 3002 | 50053 | gRPC stub |
 | pets-svc | 3003 | — | skeleton |
 | marketplace-svc | 3004 | 50052 | gRPC stub |
-| **booking-svc** | **3005** | — | **full implementation** |
+| **booking-svc** | **3005** | **50055** | **full implementation** |
 | payments-svc | 3006 | 50054 | gRPC stub |
 | gps-svc | 3007 | — | REST + Kafka producer stub |
 | messaging-svc | 3008 | — | skeleton |
@@ -43,6 +54,7 @@ actually exercises those patterns.
 | marketing-svc | 3012 | — | skeleton |
 | analytics-svc | 3013 | — | skeleton |
 | admin-svc | 3014 | — | skeleton |
+| **commerce-svc** | **3015** | — | **full implementation** |
 
 Every service exposes `GET /health`.
 
@@ -78,6 +90,44 @@ apps/booking-svc/src/
 - **Money**: integer minor-currency-unit amounts (`Money` value object) —
   never floats.
 
+## Architecture (commerce-svc)
+
+```
+apps/commerce-svc/src/
+  domain/           # Storefront, Product, Order + OrderLineItem, OrderStatus,
+                     # RequiresUpcomingBookingPolicy, the saga (CommerceProcessManager)
+  infra/
+    grpc/           # trust-safety / payments / booking gRPC clients
+    persistence/    # TypeORM entities' migration, DataSource for the CLI
+    messaging/      # Kafka producer (outbox relay) + consumer (booking.events)
+    redis.provider.ts
+  api/              # Controllers, DTOs
+```
+
+Model: **tienda propia por paseador** — each provider gets their own
+storefront and sets their own products/prices (not a PawMates-curated
+catalog), delivered on the owner's next walk (no shipping/carrier).
+
+- **Pay in full at checkout**, unlike Booking (authorized at accept,
+  captured at completion) — `PaymentsService.ChargeOrder` runs inside
+  `CommerceProcessManager.placeOrder()`, before the Order is ever
+  persisted, same "fail fast, don't touch the database yet" discipline as
+  `createBooking`.
+- **RequiresUpcomingBookingPolicy**: an Order only reaches
+  `awaiting_delivery` once a confirmed, still-future Booking exists
+  between that owner and that provider — checked via `booking-svc`'s one
+  inbound gRPC method, `BookingService.GetUpcomingConfirmedBooking`. If
+  none exists yet, the Order stays `paid` and the owner retries
+  `POST /v1/orders/:id/attach-delivery-booking` once they've booked a walk.
+- **Delivery is never inferred from GPS.** `commerce-svc` consumes
+  `booking.events`/`WalkFinished` (booking-svc's own event, itself
+  triggered by `gps.events`/TripCompleted) only to *open a delivery
+  window* — actually marking an Order `delivered` always requires the
+  walker's explicit `POST /v1/orders/:id/confirm-delivery`.
+- **Optimistic stock locking**: `Product.version` (`@VersionColumn`) means
+  two concurrent orders can't both win the last unit — the loser's save
+  fails and the saga surfaces it as `commerce.insufficient_stock`.
+
 ## Prerequisites
 
 - Node.js 20+
@@ -92,13 +142,16 @@ npm install
 # Start Postgres/Redis/Redpanda only (services run on your host instead):
 docker compose up -d postgres redis redpanda
 
-# Run booking-svc's migration once Postgres is up:
+# Run booking-svc's and commerce-svc's migrations once Postgres is up:
 DB_HOST=127.0.0.1 DB_PORT=5432 DB_USER=postgres DB_PASSWORD=postgres DB_NAME=pawmates \
   npm run migration:run:booking-svc
+DB_HOST=127.0.0.1 DB_PORT=5432 DB_USER=postgres DB_PASSWORD=postgres DB_NAME=pawmates \
+  npm run migration:run:commerce-svc
 
-npm run build           # builds all 14 apps
-npm test                # unit + integration tests (booking-svc)
+npm run build           # builds all 15 apps
+npm test                # unit + integration tests (booking-svc, commerce-svc)
 npm run start:booking-svc:dev
+npm run start:commerce-svc:dev
 ```
 
 The `no-double-booking.policy.integration.spec.ts` suite talks to a real
@@ -113,12 +166,12 @@ reachable, so `npm test` still passes without one.
 docker compose up --build
 ```
 
-This builds all 14 images from the single parameterized `Dockerfile`
+This builds all 15 images from the single parameterized `Dockerfile`
 (selected per-service via the `APP_NAME` build arg), brings up
-Postgres/Redis/Redpanda with health checks, runs booking-svc's migration
-as a one-shot job, and starts all 14 services. Requires a Compose version
-supporting the `service_completed_successfully` depends_on condition
-(Docker Compose v2.20+).
+Postgres/Redis/Redpanda with health checks, runs booking-svc's and
+commerce-svc's migrations as one-shot jobs, and starts all 15 services.
+Requires a Compose version supporting the `service_completed_successfully`
+depends_on condition (Docker Compose v2.20+).
 
 ## Monorepo layout
 
@@ -128,7 +181,7 @@ libs/common/src/        # Money, DomainError hierarchy, Kafka topics/envelope,
                          # transactional-outbox base entity, JWT guard,
                          # idempotency interceptor
 libs/proto/src/         # .proto files + hand-written TS client interfaces
-                         # for the 3 internal gRPC contracts booking-svc calls
+                         # for the 4 internal gRPC contracts booking-svc/commerce-svc call
 scripts/                # scaffold-monorepo.js (one-time), build-all.js
 ```
 

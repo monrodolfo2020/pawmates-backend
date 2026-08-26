@@ -84,6 +84,25 @@ services:
       DB_NAME: pawmates
     entrypoint: ['npx', 'ts-node', '-r', 'tsconfig-paths/register', './node_modules/typeorm/cli.js', 'migration:run', '-d', 'apps/booking-svc/src/infra/persistence/data-source.ts']
 
+  # One-shot: runs commerce-svc's migration then exits, same pattern as
+  # booking-svc-migrate above.
+  commerce-svc-migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: commerce-svc
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: pawmates
+    entrypoint: ['npx', 'ts-node', '-r', 'tsconfig-paths/register', './node_modules/typeorm/cli.js', 'migration:run', '-d', 'apps/commerce-svc/src/infra/persistence/data-source.ts']
+
   identity-svc:
     <<: *service-defaults
     build:
@@ -154,8 +173,10 @@ services:
         condition: service_completed_successfully
     ports:
       - '3005:3005'
+      - '50055:50055'
     environment:
       PORT: 3005
+      GRPC_PORT: 50055
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: postgres
@@ -278,6 +299,38 @@ services:
       - '3014:3014'
     environment:
       PORT: 3014
+
+  commerce-svc:
+    <<: *service-defaults
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_NAME: commerce-svc
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      commerce-svc-migrate:
+        condition: service_completed_successfully
+    ports:
+      - '3015:3015'
+    environment:
+      PORT: 3015
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: pawmates
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKERS: redpanda:9092
+      JWT_SECRET: dev-secret-change-me
+      TRUST_SAFETY_GRPC_URL: trust-safety-svc:50053
+      PAYMENTS_GRPC_URL: payments-svc:50054
+      BOOKING_GRPC_URL: booking-svc:50055
 
 volumes:
   postgres-data:
