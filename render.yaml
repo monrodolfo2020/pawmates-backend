@@ -3,29 +3,23 @@
 # docker-compose.yml's topology on Render's infrastructure instead of a
 # local machine.
 #
-# ⚠️ Written from Render's documented Blueprint spec as of this repo's
-# last update, in an environment that couldn't reach render.com to
-# re-verify it live. Before applying: open this file in Render's
-# "New > Blueprint" flow, which validates syntax and shows every resource
-# it's about to create *without creating anything* — fix anything it flags
-# there first. The two properties most likely to need adjusting for
-# whatever the current API looks like:
-#   - the `fromDatabase` property names on booking-svc/commerce-svc
-#     (host/port/user/password/database) — if Render only exposes
-#     `connectionString` today, those two services would need a small
-#     code change to parse a DATABASE_URL instead of discrete DB_* vars.
-#   - `redpanda`'s `runtime: image` block (deploying a public Docker Hub
-#     image without a Dockerfile) — the field name/shape for this has
-#     changed on Render before.
+# Validated against Render's own Blueprint preview (open this file in
+# Render's "New > Blueprint" flow, which validates syntax and shows every
+# resource it's about to create *without creating anything*) — the
+# `fromDatabase` properties and `redpanda`'s `runtime: image` block both
+# came back clean; the one real issue it caught (`preDeployCommand` isn't
+# available on `free` plans) is already fixed below.
 #
 # Every service reaches every other by service name over Render's private
 # network (e.g. `trust-safety-svc:50053`), the same convention
 # docker-compose.yml uses locally — see the Dockerfile's comment for why
 # no service needs its own build args anymore.
 #
-# Plans: everything is `free` except `redpanda` (`starter`, ~$7/mo) — see
-# DEPLOY.md's Cost section for why, and for the free-tier Postgres
-# expiration caveat.
+# Plans: everything is `free`, including `redpanda` — see its own comment
+# below for the tradeoff that accepts, DEPLOY.md's Cost section for the
+# free-tier Postgres expiration caveat, and bump `redpanda` to `starter`
+# (~$7/mo, the only thing in this Blueprint that would cost anything) if
+# that tradeoff turns out not to work.
 
 databases:
   - name: pawmates-db
@@ -42,15 +36,18 @@ services:
 
   # No managed Kafka on Render — runs Redpanda's own public image directly
   # (not this repo's Dockerfile) as a private, non-internet-facing service.
-  # Kept on `starter`, not `free`: the outbox relay and Kafka consumers need
-  # a broker that's always reachable, not one that spins down on idle — the
-  # one real recurring cost in this Blueprint (~$7/mo), everything else free.
+  # On `free` to avoid requiring payment info at all — accepted tradeoff:
+  # a free private service may not "wake" the way a free *web* service does
+  # (that relies on an inbound HTTP request; a raw Kafka TCP connection from
+  # another private service may not trigger it), so booking-svc/commerce-svc
+  # could fail their Kafka connection if Redpanda has spun down. Bump this
+  # single resource back to `starter` (~$7/mo) if that turns out to bite.
   - type: pserv
     name: redpanda
     runtime: image
     image:
       url: docker.redpanda.com/redpandadata/redpanda:v24.2.7
-    plan: starter
+    plan: free
     dockerCommand: >-
       redpanda start --smp=1 --memory=1G --reserve-memory=0M
       --overprovisioned --node-id=0 --check=false

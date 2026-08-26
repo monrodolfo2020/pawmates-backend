@@ -14,20 +14,24 @@ by folding the migration into each service's own startup command instead.
 
 ## Cost
 
-Everything is on Render's **free** plan except one resource:
+Everything — all 15 web services, Postgres, Redis, and Redpanda — is on
+Render's **free** plan, so no payment info is required to apply this
+Blueprint. Three real consequences of that:
 
-- **`redpanda` is on `starter`** (~$7/mo) — the outbox relay and Kafka
-  consumers need a broker that's always reachable, not one that spins
-  down on idle the way free web services do. This is the one real
-  recurring cost in this Blueprint.
-- The 15 web services, Postgres, and Redis are all `free`. Two real
-  consequences of that:
-  - Free web services spin down after inactivity and cold-start on the
-    next request — fine for a demo, not for anything latency-sensitive.
-  - **Render's free Postgres is deleted after a fixed expiration window**
-    (historically ~30-90 days) unless upgraded. If this is meant to carry
-    real data, upgrade `pawmates-db`'s plan before that happens — don't
-    find out by losing the database.
+- Free web services spin down after inactivity and cold-start on the
+  next request — fine for a demo, not for anything latency-sensitive.
+- **`redpanda` on `free` is the one real risk.** The outbox relay and
+  Kafka consumers need a broker that's always reachable; a free *web*
+  service wakes on an inbound HTTP request, but a free *private* service
+  receiving a raw Kafka TCP connection from another private service may
+  not wake the same way. If `booking-svc`/`commerce-svc` fail their Kafka
+  connection on boot, that's this tradeoff biting — bump just `redpanda`
+  to `plan: starter` (~$7/mo, the only thing here that would ever cost
+  anything) to fix it.
+- **Render's free Postgres is deleted after a fixed expiration window**
+  (historically ~30-90 days) unless upgraded. If this is meant to carry
+  real data, upgrade `pawmates-db`'s plan before that happens — don't
+  find out by losing the database.
 
 ## Steps
 
