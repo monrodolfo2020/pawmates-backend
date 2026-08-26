@@ -38,6 +38,10 @@ Everything here is `free`. Two real consequences:
   only one service to begin with).
 - **No message broker.** The domain-event-log tables (`outbox_events` in
   both schemas) are written but nothing drains them — see README.
-- **Secrets**: `JWT_SECRET` is the literal `dev-secret-change-me`, same as
-  `docker-compose.yml` uses locally. Rotate this to a real generated
-  secret before this carries real traffic.
+- **JWT_SECRET** is Render-generated (`generateValue: true`) — a real
+  random value, set once at creation and never in the repo or in chat.
+  Locally, `docker-compose.yml` still uses the shared literal
+  `dev-secret-change-me` for convenience. To mint a test token against the
+  deployed instance, copy the actual value from `pawmates-api`'s
+  **Environment** tab in the Render dashboard — nothing else needs it,
+  since no other service verifies these tokens today.

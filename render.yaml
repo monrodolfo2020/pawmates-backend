@@ -24,8 +24,15 @@ services:
     envVars:
       - key: PORT
         value: '3000'
+      # Render generates and stores a real random value once at creation
+      # (not re-generated on later syncs) — unlike docker-compose.yml's
+      # shared dev-secret-change-me, this one is never visible in the repo
+      # or in chat. Fine here since there's only one service verifying its
+      # own tokens; if a second service needs to verify the same tokens
+      # later, share this value via `fromService`, not a second
+      # generateValue (that would mint a different secret).
       - key: JWT_SECRET
-        value: dev-secret-change-me
+        generateValue: true
       - key: DB_HOST
         fromDatabase: { name: pawmates-db, property: host }
       - key: DB_PORT
