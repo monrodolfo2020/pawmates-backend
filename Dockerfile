@@ -1,21 +1,21 @@
-# Builds any one of the 14 apps in this monorepo, selected via APP_NAME
-# (docker-compose passes it as a build arg per service). Every app compiles
-# to the same shape — dist/apps/<name>/apps/<name>/src/main.js — because
-# every apps/*/tsconfig.app.json pins rootDir to the repo root, so this
+# Builds all 15 apps in this monorepo into one shared image; which one a
+# given container actually runs is selected purely at *runtime* via the
+# APP_NAME env var (not a build arg) — so every service, on Docker Compose
+# or on a host like Render with no build-arg-per-service support, uses this
+# exact same image. Every app compiles to the same shape —
+# dist/apps/<name>/apps/<name>/src/main.js — because every
+# apps/*/tsconfig.app.json pins rootDir to the repo root, so this
 # Dockerfile never needs per-service path special-casing.
 FROM node:20-alpine AS builder
 WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-ARG APP_NAME
-RUN npx nest build ${APP_NAME}
+RUN npm run build
 
 FROM node:20-alpine
 WORKDIR /usr/src/app
 ENV NODE_ENV=production
-ARG APP_NAME
-ENV APP_NAME=${APP_NAME}
 COPY --from=builder /usr/src/app/node_modules ./node_modules
 COPY --from=builder /usr/src/app/dist ./dist
 COPY --from=builder /usr/src/app/libs/proto/src ./libs/proto/src

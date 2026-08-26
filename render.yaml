@@ -1,0 +1,326 @@
+# Render Blueprint — deploys all 15 pawmates-backend services plus
+# Postgres, Redis, and a single-node Redpanda broker, mirroring
+# docker-compose.yml's topology on Render's infrastructure instead of a
+# local machine.
+#
+# ⚠️ Written from Render's documented Blueprint spec as of this repo's
+# last update, in an environment that couldn't reach render.com to
+# re-verify it live. Before applying: open this file in Render's
+# "New > Blueprint" flow, which validates syntax and shows every resource
+# it's about to create *without creating anything* — fix anything it flags
+# there first. The two properties most likely to need adjusting for
+# whatever the current API looks like:
+#   - the `fromDatabase` property names on booking-svc/commerce-svc
+#     (host/port/user/password/database) — if Render only exposes
+#     `connectionString` today, those two services would need a small
+#     code change to parse a DATABASE_URL instead of discrete DB_* vars.
+#   - `redpanda`'s `runtime: image` block (deploying a public Docker Hub
+#     image without a Dockerfile) — the field name/shape for this has
+#     changed on Render before.
+#
+# Every service reaches every other by service name over Render's private
+# network (e.g. `trust-safety-svc:50053`), the same convention
+# docker-compose.yml uses locally — see the Dockerfile's comment for why
+# no service needs its own build args anymore.
+
+databases:
+  - name: pawmates-db
+    databaseName: pawmates
+    user: pawmates
+    plan: starter
+    postgresMajorVersion: '16'
+
+services:
+  - type: redis
+    name: pawmates-redis
+    plan: starter
+    ipAllowList: [] # private-network only, no public access
+
+  # No managed Kafka on Render — runs Redpanda's own public image directly
+  # (not this repo's Dockerfile) as a private, non-internet-facing service.
+  - type: pserv
+    name: redpanda
+    runtime: image
+    image:
+      url: docker.redpanda.com/redpandadata/redpanda:v24.2.7
+    plan: starter
+    dockerCommand: >-
+      redpanda start --smp=1 --memory=1G --reserve-memory=0M
+      --overprovisioned --node-id=0 --check=false
+      --kafka-addr=PLAINTEXT://0.0.0.0:9092
+      --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+    disk:
+      name: redpanda-data
+      mountPath: /var/lib/redpanda/data
+      sizeGB: 10
+
+  # --- Full implementation (real domain/persistence layers) ---
+
+  - type: web
+    name: booking-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    preDeployCommand: >-
+      npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js
+      migration:run -d apps/booking-svc/src/infra/persistence/data-source.ts
+    envVars:
+      - key: APP_NAME
+        value: booking-svc
+      - key: PORT
+        value: '3005'
+      - key: GRPC_PORT
+        value: '50055'
+      # Matches docker-compose.yml's dev secret — both services verifying
+      # tokens off the same JwtAuthGuard need to share one value, not each
+      # get their own generated one (see DEPLOY.md before using this for
+      # anything beyond a reference deployment).
+      - key: JWT_SECRET
+        value: dev-secret-change-me
+      - key: DB_HOST
+        fromDatabase: { name: pawmates-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: pawmates-db, property: port }
+      - key: DB_USER
+        fromDatabase: { name: pawmates-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: pawmates-db, property: password }
+      - key: DB_NAME
+        fromDatabase: { name: pawmates-db, property: database }
+      - key: REDIS_URL
+        fromService: { type: redis, name: pawmates-redis, property: connectionString }
+      - key: KAFKA_BROKERS
+        value: redpanda:9092
+      - key: MARKETPLACE_GRPC_URL
+        value: marketplace-svc:50052
+      - key: TRUST_SAFETY_GRPC_URL
+        value: trust-safety-svc:50053
+      - key: PAYMENTS_GRPC_URL
+        value: payments-svc:50054
+
+  - type: web
+    name: commerce-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    preDeployCommand: >-
+      npx ts-node -r tsconfig-paths/register ./node_modules/typeorm/cli.js
+      migration:run -d apps/commerce-svc/src/infra/persistence/data-source.ts
+    envVars:
+      - key: APP_NAME
+        value: commerce-svc
+      - key: PORT
+        value: '3015'
+      # Matches docker-compose.yml's dev secret — both services verifying
+      # tokens off the same JwtAuthGuard need to share one value, not each
+      # get their own generated one (see DEPLOY.md before using this for
+      # anything beyond a reference deployment).
+      - key: JWT_SECRET
+        value: dev-secret-change-me
+      - key: DB_HOST
+        fromDatabase: { name: pawmates-db, property: host }
+      - key: DB_PORT
+        fromDatabase: { name: pawmates-db, property: port }
+      - key: DB_USER
+        fromDatabase: { name: pawmates-db, property: user }
+      - key: DB_PASSWORD
+        fromDatabase: { name: pawmates-db, property: password }
+      - key: DB_NAME
+        fromDatabase: { name: pawmates-db, property: database }
+      - key: REDIS_URL
+        fromService: { type: redis, name: pawmates-redis, property: connectionString }
+      - key: KAFKA_BROKERS
+        value: redpanda:9092
+      - key: TRUST_SAFETY_GRPC_URL
+        value: trust-safety-svc:50053
+      - key: PAYMENTS_GRPC_URL
+        value: payments-svc:50054
+      - key: BOOKING_GRPC_URL
+        value: booking-svc:50055
+
+  # --- gRPC stubs (Prompt 5 scope: just enough contract for the sagas above) ---
+
+  - type: web
+    name: marketplace-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: marketplace-svc
+      - key: PORT
+        value: '3004'
+      - key: GRPC_PORT
+        value: '50052'
+
+  - type: web
+    name: trust-safety-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: trust-safety-svc
+      - key: PORT
+        value: '3002'
+      - key: GRPC_PORT
+        value: '50053'
+
+  - type: web
+    name: payments-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: payments-svc
+      - key: PORT
+        value: '3006'
+      - key: GRPC_PORT
+        value: '50054'
+
+  # --- gps-svc: REST + Kafka producer stub ---
+
+  - type: web
+    name: gps-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: gps-svc
+      - key: PORT
+        value: '3007'
+      - key: KAFKA_BROKERS
+        value: redpanda:9092
+
+  # --- Health-check-only skeletons ---
+
+  - type: web
+    name: identity-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: identity-svc
+      - key: PORT
+        value: '3001'
+
+  - type: web
+    name: pets-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: pets-svc
+      - key: PORT
+        value: '3003'
+
+  - type: web
+    name: messaging-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: messaging-svc
+      - key: PORT
+        value: '3008'
+
+  - type: web
+    name: reviews-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: reviews-svc
+      - key: PORT
+        value: '3009'
+
+  - type: web
+    name: notifications-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: notifications-svc
+      - key: PORT
+        value: '3010'
+
+  - type: web
+    name: support-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: support-svc
+      - key: PORT
+        value: '3011'
+
+  - type: web
+    name: marketing-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: marketing-svc
+      - key: PORT
+        value: '3012'
+
+  - type: web
+    name: analytics-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: analytics-svc
+      - key: PORT
+        value: '3013'
+
+  - type: web
+    name: admin-svc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    envVars:
+      - key: APP_NAME
+        value: admin-svc
+      - key: PORT
+        value: '3014'

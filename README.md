@@ -166,12 +166,20 @@ reachable, so `npm test` still passes without one.
 docker compose up --build
 ```
 
-This builds all 15 images from the single parameterized `Dockerfile`
-(selected per-service via the `APP_NAME` build arg), brings up
-Postgres/Redis/Redpanda with health checks, runs booking-svc's and
-commerce-svc's migrations as one-shot jobs, and starts all 15 services.
-Requires a Compose version supporting the `service_completed_successfully`
-depends_on condition (Docker Compose v2.20+).
+This builds one shared image from the `Dockerfile` (every service selects
+its entrypoint at *runtime* via its own `APP_NAME` env var, not a build
+arg — see the Dockerfile's top comment), brings up Postgres/Redis/Redpanda
+with health checks, runs booking-svc's and commerce-svc's migrations as
+one-shot jobs, and starts all 15 services. Requires a Compose version
+supporting the `service_completed_successfully` depends_on condition
+(Docker Compose v2.20+).
+
+### Deploying to Render
+
+[`render.yaml`](./render.yaml) is a Blueprint that deploys this same
+topology to Render. See [DEPLOY.md](./DEPLOY.md) before applying it — it
+was written without live access to Render's docs, so it documents exactly
+what to double-check in Render's Blueprint preview first.
 
 ## Monorepo layout
 

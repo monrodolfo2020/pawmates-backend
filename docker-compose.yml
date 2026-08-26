@@ -1,5 +1,9 @@
 name: pawmates-backend
 
+# All 15 services share one image build (the Dockerfile now compiles every
+# app in a single `npm run build`, keyed at *runtime* by the APP_NAME env
+# var below — not a build arg) so no service needs its own `build:` block
+# anymore, and Compose's layer cache makes 14 of the 15 builds instant.
 x-service-defaults: &service-defaults
   build:
     context: .
@@ -71,8 +75,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        APP_NAME: booking-svc
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,8 +92,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        APP_NAME: commerce-svc
     depends_on:
       postgres:
         condition: service_healthy
@@ -105,63 +105,42 @@ services:
 
   identity-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: identity-svc
     ports:
       - '3001:3001'
     environment:
+      APP_NAME: identity-svc
       PORT: 3001
 
   trust-safety-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: trust-safety-svc
     ports:
       - '3002:3002'
       - '50053:50053'
     environment:
+      APP_NAME: trust-safety-svc
       PORT: 3002
       GRPC_PORT: 50053
 
   pets-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: pets-svc
     ports:
       - '3003:3003'
     environment:
+      APP_NAME: pets-svc
       PORT: 3003
 
   marketplace-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: marketplace-svc
     ports:
       - '3004:3004'
       - '50052:50052'
     environment:
+      APP_NAME: marketplace-svc
       PORT: 3004
       GRPC_PORT: 50052
 
   booking-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: booking-svc
     depends_on:
       postgres:
         condition: service_healthy
@@ -175,6 +154,7 @@ services:
       - '3005:3005'
       - '50055:50055'
     environment:
+      APP_NAME: booking-svc
       PORT: 3005
       GRPC_PORT: 50055
       DB_HOST: postgres
@@ -191,122 +171,81 @@ services:
 
   payments-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: payments-svc
     ports:
       - '3006:3006'
       - '50054:50054'
     environment:
+      APP_NAME: payments-svc
       PORT: 3006
       GRPC_PORT: 50054
 
   gps-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: gps-svc
     ports:
       - '3007:3007'
     environment:
+      APP_NAME: gps-svc
       PORT: 3007
       KAFKA_BROKERS: redpanda:9092
 
   messaging-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: messaging-svc
     ports:
       - '3008:3008'
     environment:
+      APP_NAME: messaging-svc
       PORT: 3008
 
   reviews-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: reviews-svc
     ports:
       - '3009:3009'
     environment:
+      APP_NAME: reviews-svc
       PORT: 3009
 
   notifications-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: notifications-svc
     ports:
       - '3010:3010'
     environment:
+      APP_NAME: notifications-svc
       PORT: 3010
 
   support-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: support-svc
     ports:
       - '3011:3011'
     environment:
+      APP_NAME: support-svc
       PORT: 3011
 
   marketing-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: marketing-svc
     ports:
       - '3012:3012'
     environment:
+      APP_NAME: marketing-svc
       PORT: 3012
 
   analytics-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: analytics-svc
     ports:
       - '3013:3013'
     environment:
+      APP_NAME: analytics-svc
       PORT: 3013
 
   admin-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: admin-svc
     ports:
       - '3014:3014'
     environment:
+      APP_NAME: admin-svc
       PORT: 3014
 
   commerce-svc:
     <<: *service-defaults
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        APP_NAME: commerce-svc
     depends_on:
       postgres:
         condition: service_healthy
@@ -319,6 +258,7 @@ services:
     ports:
       - '3015:3015'
     environment:
+      APP_NAME: commerce-svc
       PORT: 3015
       DB_HOST: postgres
       DB_PORT: 5432
