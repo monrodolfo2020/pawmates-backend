@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthController } from './api/health.controller';
+import { AuthController } from './auth/auth.controller';
 import { BookingModule } from './booking/booking.module';
 import { BookingLine } from './booking/domain/entities/booking-line.entity';
 import { Booking } from './booking/domain/entities/booking.entity';
@@ -59,6 +60,6 @@ import { TripsController } from './trips/trips.controller';
     BookingModule,
     CommerceModule,
   ],
-  controllers: [HealthController, TripsController],
+  controllers: [HealthController, AuthController, TripsController],
 })
 export class AppModule {}
