@@ -1,9 +1,10 @@
 # pawmates-backend
 
 Backend for **PawMates** (a Rover/Wag-style pet-services marketplace) — a
-consolidated NestJS MVP covering two Bounded Contexts: **Booking** (a dog
-walker or sitter's reservation lifecycle) and **Commerce** (walkers
-selling their own products, delivered on the owner's next walk).
+consolidated NestJS MVP covering three Bounded Contexts: **Identity**
+(accounts, roles, pets, provider verification), **Booking** (a dog walker
+or sitter's reservation lifecycle), and **Commerce** (walkers selling
+their own products, delivered on the owner's next walk).
 
 ## Consolidated MVP
 
@@ -40,12 +41,27 @@ What changed, concretely:
   in-process query against Booking's own repository
   (`InProcessBookingAdapter`) instead of a network hop — a real
   improvement consolidation enables, not just a simplification.
-- **13 other Bounded Contexts** (Identity, Pets, GPS, Messaging, Reviews,
-  Notifications, Support, Marketing, Analytics, Admin) that were
-  health-check-only skeletons before are dropped entirely for now — they
-  added no real behavior, only more services to deploy.
+- **11 other Bounded Contexts** (GPS beyond `TripsController`, Messaging,
+  Reviews, Notifications, Support, Marketing, Analytics, and the parts of
+  Identity/Pets/Admin not described below) that were health-check-only
+  skeletons before are dropped entirely for now — they added no real
+  behavior, only more services to deploy.
 
 ## What's implemented
+
+**Identity**: real email+password accounts (bcrypt-hashed), issuing the
+same JWTs `JwtAuthGuard` already verified everywhere else — this replaced
+the MVP's original no-password `dev-login` shortcut. **One account can
+hold several roles** (`owner`, `provider`, `admin`) at once —
+`POST /v1/auth/roles` adds one to an existing account, matching the
+frontend's owner/provider mode toggle rather than forcing a second
+signup. Signing up (or adding) the `provider` role requires a face photo
+and an ID document photo — captured into `ProviderVerification` with
+`status: 'pending'` and nothing checking them yet; that's the AI
+identity-verification step this is laying groundwork for, not building.
+Owners manage any number of `Pet` records (name, breed, size,
+temperament, vaccines, an optional photo). No self-service path grants
+the `admin` role — promote the first one by hand (see DEPLOY.md).
 
 **Booking**: request → provider accepts (payment authorized) → confirmed
 → in-progress → completed, plus cancel/reject/reschedule and recurring
@@ -70,7 +86,14 @@ a real Postgres and Redis, not just unit-tested.
 
 ```
 apps/pawmates-api/src/
-  app.module.ts       # one TypeOrmModule.forRoot covering both contexts' entities
+  app.module.ts       # one TypeOrmModule.forRoot covering every context's entities
+  identity/
+    domain/entities/  # Account, Pet, ProviderVerification — no saga here,
+                       # this context is plain CRUD plus password hashing
+    api/               # auth.controller.ts (signup/login/roles),
+                        # me.controller.ts, pets.controller.ts,
+                        # admin.controller.ts
+    identity.module.ts
   booking/
     domain/           # Aggregate root, entities, value objects, policies,
                        # ports (interfaces only — no framework imports),
@@ -120,6 +143,12 @@ apps/pawmates-api/src/
   needs to match that convention too.
 - **Money**: integer minor-currency-unit amounts (`Money` value object) —
   never floats.
+- **Provider verification photos are base64 columns in Postgres**
+  (`ProviderVerification.facePhotoBase64` / `idDocumentPhotoBase64`, same
+  for `Pet.photoBase64`), not object storage — a deliberate MVP tradeoff
+  (see DEPLOY.md's Cost section) to avoid a second paid service. Sensitive
+  data sitting in the same free-tier database as everything else; treat
+  this as a demo posture, not a template for handling real ID documents.
 
 ## Prerequisites
 

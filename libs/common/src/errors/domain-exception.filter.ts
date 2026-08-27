@@ -78,6 +78,9 @@ function defaultMessageFor(code: string): string {
       'Aún no puedes confirmar la entrega — el paseo todavía no termina.',
     'commerce.no_upcoming_booking':
       'Todavía no tienes un paseo agendado con este paseador.',
+    'auth.email_already_registered': 'Ya existe una cuenta con ese correo.',
+    'auth.invalid_credentials': 'Correo o contraseña incorrectos.',
+    'auth.role_required': 'No tienes permiso para esto.',
   };
   return messages[code] ?? 'Ocurrió un error.';
 }

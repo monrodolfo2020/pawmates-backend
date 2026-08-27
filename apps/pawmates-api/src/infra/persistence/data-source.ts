@@ -12,14 +12,17 @@ import { Order } from '../../commerce/domain/entities/order.entity';
 import { OutboxEvent as CommerceOutboxEvent } from '../../commerce/domain/entities/outbox-event.entity';
 import { Product } from '../../commerce/domain/entities/product.entity';
 import { Storefront } from '../../commerce/domain/entities/storefront.entity';
+import { Account } from '../../identity/domain/entities/account.entity';
+import { Pet } from '../../identity/domain/entities/pet.entity';
+import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
 
 /**
  * Used only by the TypeORM CLI (`npm run migration:run:pawmates-api`) and
  * by tests that spin up a real schema — the app itself gets its
- * connection via TypeOrmModule.forRoot in app.module.ts. Covers both
- * Bounded Contexts' migrations; they create separate schemas
- * (`booking.*` / `commerce.*`) so there's no collision running them
- * from one DataSource.
+ * connection via TypeOrmModule.forRoot in app.module.ts. Covers every
+ * Bounded Context's migrations; they create separate schemas
+ * (`identity.*` / `booking.*` / `commerce.*`) so there's no collision
+ * running them from one DataSource.
  */
 const pawmatesDataSource = new DataSource({
   type: 'postgres',
@@ -29,6 +32,9 @@ const pawmatesDataSource = new DataSource({
   password: process.env.DB_PASSWORD ?? 'postgres',
   database: process.env.DB_NAME ?? 'pawmates',
   entities: [
+    Account,
+    Pet,
+    ProviderVerification,
     Booking,
     BookingLine,
     CancellationRecord,
@@ -43,6 +49,7 @@ const pawmatesDataSource = new DataSource({
     CommerceOutboxEvent,
   ],
   migrations: [
+    __dirname + '/../../identity/infra/persistence/migrations/*.{ts,js}',
     __dirname + '/../../booking/infra/persistence/migrations/*.{ts,js}',
     __dirname + '/../../commerce/infra/persistence/migrations/*.{ts,js}',
   ],

@@ -17,6 +17,15 @@ requires no payment info on file.
    and then starts the app, in that order, every time it boots — check its
    deploy log for the migration output if it fails to come up healthy.
    Safe to repeat: TypeORM skips migrations already recorded as applied.
+4. Sign up a normal account through the app, then promote it to `admin`
+   directly in Postgres (there's no self-service path — see README's
+   Identity section for why) using Render's **Shell** tab on `pawmates-db`,
+   or `psql` against its external connection string from the **Info** tab:
+   ```sql
+   UPDATE identity.accounts
+   SET roles = roles || '["admin"]'::jsonb
+   WHERE email = 'you@example.com';
+   ```
 
 ## Cost and its tradeoffs
 
@@ -38,6 +47,11 @@ Everything here is `free`. Two real consequences:
   only one service to begin with).
 - **No message broker.** The domain-event-log tables (`outbox_events` in
   both schemas) are written but nothing drains them — see README.
+- **Provider verification and pet photos live in Postgres as base64**,
+  not object storage — see README's Identity section for the tradeoff
+  that accepts. Anyone with the free Postgres's connection string can read
+  every uploaded ID document; fine for a demo with test accounts, not for
+  anything real.
 - **JWT_SECRET** is Render-generated (`generateValue: true`) — a real
   random value, set once at creation and never in the repo or in chat.
   Locally, `docker-compose.yml` still uses the shared literal

@@ -3,7 +3,6 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HealthController } from './api/health.controller';
-import { AuthController } from './auth/auth.controller';
 import { BookingModule } from './booking/booking.module';
 import { BookingLine } from './booking/domain/entities/booking-line.entity';
 import { Booking } from './booking/domain/entities/booking.entity';
@@ -18,13 +17,17 @@ import { Order } from './commerce/domain/entities/order.entity';
 import { OutboxEvent as CommerceOutboxEvent } from './commerce/domain/entities/outbox-event.entity';
 import { Product } from './commerce/domain/entities/product.entity';
 import { Storefront } from './commerce/domain/entities/storefront.entity';
+import { IdentityModule } from './identity/identity.module';
+import { Account } from './identity/domain/entities/account.entity';
+import { Pet } from './identity/domain/entities/pet.entity';
+import { ProviderVerification } from './identity/domain/entities/provider-verification.entity';
 import { TripsController } from './trips/trips.controller';
 
 /**
- * Consolidated PawMates MVP — Booking and Commerce in one deployable
- * (see README's "Consolidated MVP" section for why). One shared
- * TypeOrmModule.forRoot() covers both Bounded Contexts' entities;
- * BookingModule/CommerceModule each only register their own slice via
+ * Consolidated PawMates MVP — Identity, Booking, and Commerce in one
+ * deployable (see README's "Consolidated MVP" section for why). One
+ * shared TypeOrmModule.forRoot() covers every Bounded Context's entities;
+ * each feature module only registers its own slice via
  * TypeOrmModule.forFeature().
  */
 @Module({
@@ -42,6 +45,9 @@ import { TripsController } from './trips/trips.controller';
       password: process.env.DB_PASSWORD ?? 'postgres',
       database: process.env.DB_NAME ?? 'pawmates',
       entities: [
+        Account,
+        Pet,
+        ProviderVerification,
         Booking,
         BookingLine,
         CancellationRecord,
@@ -57,9 +63,10 @@ import { TripsController } from './trips/trips.controller';
       ],
       synchronize: false, // schema owned by migrations
     }),
+    IdentityModule,
     BookingModule,
     CommerceModule,
   ],
-  controllers: [HealthController, AuthController, TripsController],
+  controllers: [HealthController, TripsController],
 })
 export class AppModule {}

@@ -79,3 +79,22 @@ export class NoUpcomingBookingError extends DomainError {
   readonly httpStatus = 422;
   readonly retryable = true;
 }
+
+export class EmailAlreadyRegisteredError extends DomainError {
+  readonly code = 'auth.email_already_registered';
+  readonly httpStatus = 409;
+  readonly retryable = false;
+}
+
+export class InvalidCredentialsError extends DomainError {
+  readonly code = 'auth.invalid_credentials';
+  readonly httpStatus = 401;
+  readonly retryable = false;
+}
+
+/** e.g. a non-admin account calling an admin-only endpoint. */
+export class RoleRequiredError extends DomainError {
+  readonly code = 'auth.role_required';
+  readonly httpStatus = 403;
+  readonly retryable = false;
+}
