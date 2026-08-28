@@ -88,6 +88,7 @@ export class CommerceProcessManager {
 
     const product = Product.list({
       storefrontId: storefront.id,
+      catalogItemId: cmd.catalogItemId,
       name: cmd.name,
       description: cmd.description,
       price: Money.of(cmd.priceAmount, cmd.priceCurrency),

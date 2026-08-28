@@ -9,6 +9,7 @@ export interface OpenStorefrontCommand {
 export interface AddProductCommand {
   storefrontId: string;
   requestedBy: string; // must equal the storefront's providerId
+  catalogItemId?: string | null;
   name: string;
   description?: string | null;
   priceAmount: number;

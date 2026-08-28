@@ -12,6 +12,7 @@ import { PriceBreakdown } from './booking/domain/entities/price-breakdown.entity
 import { RecurrenceSeries } from './booking/domain/entities/recurrence-series.entity';
 import { RescheduleRequest } from './booking/domain/entities/reschedule-request.entity';
 import { CommerceModule } from './commerce/commerce.module';
+import { CatalogItem } from './commerce/domain/entities/catalog-item.entity';
 import { OrderLineItem } from './commerce/domain/entities/order-line-item.entity';
 import { Order } from './commerce/domain/entities/order.entity';
 import { OutboxEvent as CommerceOutboxEvent } from './commerce/domain/entities/outbox-event.entity';
@@ -57,6 +58,7 @@ import { TripsController } from './trips/trips.controller';
         BookingOutboxEvent,
         Storefront,
         Product,
+        CatalogItem,
         Order,
         OrderLineItem,
         CommerceOutboxEvent,

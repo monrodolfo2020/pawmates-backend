@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrderController } from './api/order.controller';
 import { ProductController } from './api/product.controller';
 import { StorefrontController } from './api/storefront.controller';
+import { CatalogItem } from './domain/entities/catalog-item.entity';
 import { OrderLineItem } from './domain/entities/order-line-item.entity';
 import { Order } from './domain/entities/order.entity';
 import { OutboxEvent } from './domain/entities/outbox-event.entity';
@@ -34,6 +35,7 @@ import { RedisProvider } from '../infra/redis.provider';
     TypeOrmModule.forFeature([
       Storefront,
       Product,
+      CatalogItem,
       Order,
       OrderLineItem,
       OutboxEvent,

@@ -31,6 +31,12 @@ export class Product {
   @Column({ name: 'storefront_id', type: 'text' })
   storefrontId!: string;
 
+  // The CatalogItem this was listed from — name/description/category are
+  // snapshotted onto this row at creation (see AddProductCatalog
+  // migration), so this is provenance, not a live reference to re-read.
+  @Column({ name: 'catalog_item_id', type: 'text', nullable: true })
+  catalogItemId!: string | null;
+
   @Column({ type: 'text' })
   name!: string;
 
@@ -71,6 +77,7 @@ export class Product {
 
   static list(params: {
     storefrontId: string;
+    catalogItemId?: string | null;
     name: string;
     description?: string | null;
     price: Money;
@@ -80,6 +87,7 @@ export class Product {
     const product = new Product();
     product.id = ulid().toLowerCase();
     product.storefrontId = params.storefrontId;
+    product.catalogItemId = params.catalogItemId ?? null;
     product.name = params.name;
     product.description = params.description ?? null;
     product.priceAmount = params.price.amount;

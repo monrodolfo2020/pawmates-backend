@@ -70,18 +70,33 @@ bookings. Saga orchestration (`BookingProcessManager`), a
 IDs, integer minor-currency-unit `Money`.
 
 **Commerce** ("tienda propia por paseador" — each walker gets their own
-storefront and prices, not a PawMates-curated catalog): open a
-storefront (requires a passing Trust & Safety check), list products,
-place an order (charged in full at checkout), link it to a confirmed
-upcoming Booking for delivery, and have the walker explicitly confirm
-hand-off — never inferred from the trip alone. Optimistic stock locking
-via `Product.version` so two orders can't both win the last unit.
+storefront and prices, not a PawMates-curated catalog): place an order
+(charged in full at checkout), link it to a confirmed upcoming Booking
+for delivery, and have the walker explicitly confirm hand-off — never
+inferred from the trip alone. Optimistic stock locking via
+`Product.version` so two orders can't both win the last unit.
 `GET /v1/storefronts` lists every open storefront — this MVP has no real
 Marketplace/discovery Bounded Context, so it's how an owner finds a
 walker's shop rather than through curated search. Admin gets read-only
 platform-wide oversight of both storefronts and orders
 (`GET /v1/admin/storefronts`, `GET /v1/admin/orders`), same pattern as
 its existing accounts/verifications endpoints.
+
+Two things are locked down for now, both easy to loosen later: **opening
+a storefront is admin-only** (`POST /v1/storefronts` takes a
+`providerId` and requires the caller's `admin` role — a provider can no
+longer self-serve one; the platform wants to control who's allowed to
+sell before opening that up), and **a provider can't list an arbitrary
+product** — `POST /v1/storefronts/me/products` takes a `catalogItemId`,
+not free-text name/description/category, and copies those fields from
+`CatalogItem` onto the `Product` at creation time (so a later catalog
+edit never silently changes something already for sale — same
+snapshot rationale `OrderLineItem` already uses). The catalog seeds with
+100 generic pet-store items (`AddProductCatalog` migration) across every
+`ProductCategory`, no photos (`photo_base64` starts `NULL`) — the admin
+adds those through `PATCH /v1/admin/catalog/:id`
+(`GET /v1/admin/catalog` lists all of them; `GET /v1/storefronts/catalog`
+is the provider-facing subset, active only).
 
 Full request→response flow, end to end: `POST /v1/bookings` → accept →
 `POST /v1/trips/:id/start|complete` → `POST /v1/orders` → confirm
