@@ -1,4 +1,4 @@
-import { CurrentAccount, JwtAuthGuard } from '@pawmates/common';
+import { CurrentAccount, JwtAuthGuard, ResourceNotFoundError } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -37,11 +37,46 @@ export class StorefrontController {
     return { data: toStorefrontResponse(storefront) };
   }
 
+  /**
+   * Browse every open storefront on the platform — this MVP has no real
+   * Marketplace/discovery Bounded Context (see README), so this is how an
+   * owner finds a walker's shop rather than through the (mock) walker
+   * cards on Home.
+   */
+  @Get()
+  async listActive() {
+    const storefronts = await this.storefronts.find({
+      where: { isActive: true },
+      order: { createdAt: 'DESC' },
+    });
+    const counts = await this.products
+      .createQueryBuilder('p')
+      .select('p.storefront_id', 'storefrontId')
+      .addSelect('COUNT(*) FILTER (WHERE p.is_active)', 'productCount')
+      .where('p.storefront_id IN (:...ids)', {
+        ids: storefronts.length ? storefronts.map((s) => s.id) : [''],
+      })
+      .groupBy('p.storefront_id')
+      .getRawMany<{ storefrontId: string; productCount: string }>();
+    const countById = new Map(counts.map((c) => [c.storefrontId, Number(c.productCount)]));
+
+    return {
+      data: storefronts.map((s) => ({
+        ...toStorefrontResponse(s),
+        productCount: countById.get(s.id) ?? 0,
+      })),
+    };
+  }
+
+  /** null means this provider hasn't opened a storefront yet — a normal
+   * state, not an error (POST here to open one). */
   @Get('me')
   async getMine(@CurrentAccount() account: AuthenticatedAccount) {
-    const storefront = await this.storefronts.findOneOrFail({
+    const storefront = await this.storefronts.findOne({
       where: { providerId: account.accountId },
     });
+    if (!storefront) return { data: null };
+
     const products = await this.products.find({
       where: { storefrontId: storefront.id },
     });
@@ -55,9 +90,12 @@ export class StorefrontController {
 
   @Get(':providerId')
   async getPublic(@Param('providerId') providerId: string) {
-    const storefront = await this.storefronts.findOneOrFail({
+    const storefront = await this.storefronts.findOne({
       where: { providerId },
     });
+    if (!storefront) {
+      throw new ResourceNotFoundError('Este paseador no tiene una tienda abierta.');
+    }
     const products = await this.products.find({
       where: { storefrontId: storefront.id, isActive: true },
     });
@@ -74,9 +112,12 @@ export class StorefrontController {
     @Body() dto: AddProductDto,
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
-    const storefront = await this.storefronts.findOneOrFail({
+    const storefront = await this.storefronts.findOne({
       where: { providerId: account.accountId },
     });
+    if (!storefront) {
+      throw new ResourceNotFoundError('Todavía no has abierto tu tienda.');
+    }
     const product = await this.processManager.addProduct({
       storefrontId: storefront.id,
       requestedBy: account.accountId,

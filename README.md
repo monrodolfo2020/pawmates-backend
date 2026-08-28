@@ -76,6 +76,12 @@ place an order (charged in full at checkout), link it to a confirmed
 upcoming Booking for delivery, and have the walker explicitly confirm
 hand-off — never inferred from the trip alone. Optimistic stock locking
 via `Product.version` so two orders can't both win the last unit.
+`GET /v1/storefronts` lists every open storefront — this MVP has no real
+Marketplace/discovery Bounded Context, so it's how an owner finds a
+walker's shop rather than through curated search. Admin gets read-only
+platform-wide oversight of both storefronts and orders
+(`GET /v1/admin/storefronts`, `GET /v1/admin/orders`), same pattern as
+its existing accounts/verifications endpoints.
 
 Full request→response flow, end to end: `POST /v1/bookings` → accept →
 `POST /v1/trips/:id/start|complete` → `POST /v1/orders` → confirm

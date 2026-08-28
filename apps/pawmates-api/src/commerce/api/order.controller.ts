@@ -67,7 +67,7 @@ export class OrderController {
           : 'o.provider_id = :accountId',
         { accountId: account.accountId },
       )
-      .orderBy('o.created_at', 'DESC')
+      .orderBy('o.createdAt', 'DESC')
       .take(Math.min(Number(limit) || 20, 100));
 
     if (status) qb.andWhere('o.status = :status', { status });
