@@ -5,22 +5,30 @@ import type {
 } from '../../domain/ports/marketplace.port';
 import { Money } from '@pawmates/common';
 
-// A fixed demo ServiceProvider account — real marketplace-svc would resolve
-// this from provider_service_id via a ServiceProvider/RateCard lookup; out
-// of scope for this MVP (see README).
-const DEMO_PROVIDER_ID = '00000000-0000-0000-0000-0000000000aa';
-
 /**
  * MVP stand-in for the Marketplace Bounded Context. Always reports
  * availability with a flat rate card, exactly like the old marketplace-svc
  * gRPC stub did, so BookingProcessManager's saga still runs end to end.
+ *
+ * Real marketplace-svc would resolve providerServiceId to a ServiceProvider
+ * account via a ServiceProvider/RateCard lookup (out of scope for this MVP,
+ * see README) — there being no real ServiceProvider/RateCard records to
+ * look up. Until that exists, `providerServiceId` *is* treated as the
+ * provider's own account id directly: it used to be discarded in favor of
+ * one hardcoded demo id, which meant every booking — for whichever walker
+ * the owner actually picked — collided on that same provider's schedule,
+ * with "ese paseador ya tiene su horario ocupado" on effectively the very
+ * first double-booked slot, for every walker. Each distinct
+ * providerServiceId a client sends is now a genuinely distinct provider.
  */
 @Injectable()
 export class FakeMarketplaceAdapter implements MarketplacePort {
-  checkAvailability(): Promise<AvailabilityCheck> {
+  checkAvailability(params: {
+    providerServiceId: string;
+  }): Promise<AvailabilityCheck> {
     return Promise.resolve({
       available: true,
-      providerId: DEMO_PROVIDER_ID,
+      providerId: params.providerServiceId,
       rate: Money.of(5000, 'USD'),
       commission: Money.of(750, 'USD'),
       tax: Money.of(0, 'USD'),
