@@ -15,12 +15,12 @@ export type VerificationStatus = 'pending' | 'verified' | 'rejected';
  * yet — that's the AI verification step this is explicitly laying the
  * groundwork for, not built in this pass.
  */
-@Entity({ name: 'provider_verifications', schema: 'identity' })
+@Entity({ name: 'identity_provider_verifications' })
 export class ProviderVerification {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'account_id', type: 'uuid', unique: true })
+  @Column({ name: 'account_id', type: 'text', unique: true })
   accountId!: string;
 
   @Column({ name: 'face_photo_base64', type: 'text' })
@@ -32,6 +32,6 @@ export class ProviderVerification {
   @Column({ type: 'text', default: 'pending' })
   status!: VerificationStatus;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 }

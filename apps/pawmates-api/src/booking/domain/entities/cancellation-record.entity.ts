@@ -13,7 +13,7 @@ import { Booking } from './booking.entity';
  * CancellationRecord (Data Model doc §07). Append-only — Convención 05:
  * a reschedule never rewrites this, it creates a new linked Booking.
  */
-@Entity({ name: 'cancellation_records', schema: 'booking' })
+@Entity({ name: 'booking_cancellation_records' })
 export class CancellationRecord {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -28,7 +28,7 @@ export class CancellationRecord {
   @JoinColumn({ name: 'booking_id' })
   booking!: Booking;
 
-  @Column({ name: 'cancelled_by', type: 'uuid' })
+  @Column({ name: 'cancelled_by', type: 'text' })
   cancelledBy!: string;
 
   @Column({ type: 'text', nullable: true })
@@ -41,9 +41,9 @@ export class CancellationRecord {
   })
   penaltyAmount!: number;
 
-  @Column({ name: 'penalty_currency', type: 'char', length: 3 })
+  @Column({ name: 'penalty_currency', type: 'text' })
   penaltyCurrency!: string;
 
-  @CreateDateColumn({ name: 'cancelled_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'cancelled_at', type: 'datetime' })
   cancelledAt!: Date;
 }

@@ -54,7 +54,7 @@ export class NoDoubleBookingPolicy {
                  WHEN 'min' THEN 1 WHEN 'hour' THEN 60 WHEN 'day' THEN 1440 END)`,
               'duration_minutes',
             )
-            .from('booking.booking_lines', 'bl')
+            .from('booking_booking_lines', 'bl')
             .groupBy('bl.booking_id'),
         'dur',
         'dur.booking_id = b.id',
@@ -63,7 +63,10 @@ export class NoDoubleBookingPolicy {
       .andWhere('b.status IN (:...statuses)', { statuses: ACTIVE_STATUSES })
       .andWhere('b.scheduled_at < :windowEnd', { windowEnd })
       .andWhere(
-        `b.scheduled_at + (dur.duration_minutes || ' minutes')::interval > :windowStart`,
+        // SQLite/libSQL has no INTERVAL type — datetime()'s modifier form
+        // does the same "add N minutes" arithmetic Postgres's `::interval`
+        // cast did.
+        `datetime(b.scheduled_at, '+' || dur.duration_minutes || ' minutes') > :windowStart`,
         { windowStart: scheduledAt },
       )
       .getOne();

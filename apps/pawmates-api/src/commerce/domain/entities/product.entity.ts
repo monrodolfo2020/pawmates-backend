@@ -23,7 +23,7 @@ export type ProductCategory =
  * gets a stale-write error from TypeORM/Postgres, and the saga surfaces
  * that as InsufficientStockError on retry.
  */
-@Entity({ name: 'products', schema: 'commerce' })
+@Entity({ name: 'commerce_products' })
 export class Product {
   @PrimaryColumn('text')
   id!: string;
@@ -50,7 +50,7 @@ export class Product {
   })
   priceAmount!: number;
 
-  @Column({ name: 'price_currency', type: 'char', length: 3 })
+  @Column({ name: 'price_currency', type: 'text' })
   priceCurrency!: string;
 
   @Column({ name: 'stock_quantity', type: 'int', nullable: true })
@@ -65,10 +65,10 @@ export class Product {
   @VersionColumn()
   version!: number;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'datetime' })
   updatedAt!: Date;
 
   get price(): Money {

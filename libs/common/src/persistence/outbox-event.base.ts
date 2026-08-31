@@ -24,12 +24,12 @@ export abstract class OutboxEventBase {
   @Column({ name: 'partition_key', type: 'text' })
   partitionKey!: string;
 
-  @Column({ type: 'jsonb' })
+  @Column({ type: 'simple-json' })
   payload!: Record<string, unknown>;
 
   @Column({ name: 'trace_id', type: 'text' })
   traceId!: string;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 }

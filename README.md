@@ -20,9 +20,10 @@ What changed, concretely:
 
 - **Booking and Commerce live in one NestJS app** (`apps/pawmates-api`),
   not two. Each keeps its own `domain/`, `infra/`, `api/` folders and its
-  own Postgres schema (`booking.*` / `commerce.*`) — the *domain and saga
-  code is untouched* from the multi-service version, since it only ever
-  depended on port interfaces, never on gRPC or Kafka directly.
+  own table-name prefix (`booking_*` / `commerce_*` — see Database
+  section) — the *domain and saga code is untouched* from the
+  multi-service version, since it only ever depended on port interfaces,
+  never on gRPC or Kafka directly.
 - **No message broker.** The two places that used to talk over Kafka —
   `gps-svc` publishing trip events for `booking-svc` to consume, and
   `booking-svc` publishing `WalkFinished` for `commerce-svc` to consume —
@@ -101,7 +102,7 @@ is the provider-facing subset, active only).
 Full request→response flow, end to end: `POST /v1/bookings` → accept →
 `POST /v1/trips/:id/start|complete` → `POST /v1/orders` → confirm
 delivery. Exercised live (see git history / this MVP's development) with
-a real Postgres and Redis, not just unit-tested.
+a real Turso/libSQL database and Redis, not just unit-tested.
 
 ## Architecture
 
@@ -157,36 +158,65 @@ apps/pawmates-api/src/
   marking an Order `delivered` always requires the walker's own explicit
   `POST /v1/orders/:id/confirm-delivery`.
 - **IDs**: aggregate roots use ULIDs (time-ordered, see `ulid` package),
-  stored as Postgres `text` columns — not `uuid`, since a ULID's Crockford
-  base32 encoding isn't valid RFC-4122 UUID syntax. Everything that
+  stored as `text` columns — not `uuid`, since a ULID's Crockford
+  base32 encoding isn't valid RFC-4122 UUID syntax (and, separately,
+  SQLite/libSQL has no native `uuid` column type at all). Everything that
   references another Bounded Context's own ID (`owner_id`, `provider_id`,
   `pet_id`, `address_id`, and `Order.deliveryBookingId` — a `Booking.id`)
   needs to match that convention too.
 - **Money**: integer minor-currency-unit amounts (`Money` value object) —
   never floats.
-- **Provider verification photos are base64 columns in Postgres**
+- **Provider verification photos are base64 text columns**
   (`ProviderVerification.facePhotoBase64` / `idDocumentPhotoBase64`, same
   for `Pet.photoBase64`), not object storage — a deliberate MVP tradeoff
   (see DEPLOY.md's Cost section) to avoid a second paid service. Sensitive
-  data sitting in the same free-tier database as everything else; treat
-  this as a demo posture, not a template for handling real ID documents.
+  data sitting in the same database as everything else; treat this as a
+  demo posture, not a template for handling real ID documents.
+
+## Database
+
+The database is **Turso** — a hosted platform built on **libSQL** (an
+open-source SQLite fork with remote-access/replica support), not
+PostgreSQL. TypeORM has no dedicated Turso/libSQL dialect, so this project
+reuses TypeORM's built-in `better-sqlite3` driver, aliased at the package
+level to actually load `libsql` instead
+(`package.json`: `"better-sqlite3": "npm:libsql@^0.5"` — `libsql`'s client
+implements a near-drop-in `better-sqlite3`-compatible API). The connection
+itself, including injecting Turso's `authToken` — which TypeORM's own
+`BetterSqlite3Driver` doesn't know how to forward — is centralized in
+[`apps/pawmates-api/src/infra/persistence/libsql-connection.ts`](./apps/pawmates-api/src/infra/persistence/libsql-connection.ts).
+
+No `TURSO_DATABASE_URL` set → falls back to a local libSQL file
+(`SQLITE_LOCAL_PATH`, default `./pawmates-local.db`) — the same engine,
+just not synced to Turso, so local dev and `npm test` need no Turso
+account at all.
+
+SQLite/libSQL has no schema concept, so the old `identity.*` /
+`booking.*` / `commerce.*` Postgres schema-per-Bounded-Context split is
+now a table-name prefix instead (`identity_accounts`, `booking_bookings`,
+`commerce_products`, ...).
+
+**Note**: this is a from-scratch database engine, not an in-place upgrade
+— any existing data in a previous Postgres deployment does not carry over
+automatically. See DEPLOY.md.
 
 ## Prerequisites
 
 - Node.js 20+
-- PostgreSQL 16 and Redis 7 — or Docker, to run both via compose.
+- Redis 7 — or Docker, to run it via compose. (No separate database
+  server to install — see Database section above.)
 
 ## Setup
 
 ```bash
 npm install
 
-# Start Postgres/Redis only (the app runs on your host instead):
-docker compose up -d postgres redis
+# Start Redis only (the app runs on your host instead):
+docker compose up -d redis
 
-# Run the migration once Postgres is up:
-DB_HOST=127.0.0.1 DB_PORT=5432 DB_USER=postgres DB_PASSWORD=postgres DB_NAME=pawmates \
-  npm run migration:run:pawmates-api
+# Run the migration — writes to ./pawmates-local.db by default, no
+# Turso account needed for local dev:
+npm run migration:run:pawmates-api
 
 npm run build
 npm test
@@ -194,10 +224,10 @@ npm run start:pawmates-api:dev
 ```
 
 The `no-double-booking.policy.integration.spec.ts` suite talks to a real
-Postgres (using the same `DB_*` env vars, defaulting to
-`127.0.0.1:5432`/`postgres`/`postgres`/`pawmates`) to exercise the raw-SQL
-overlap query — it skips itself with a console warning if no database is
-reachable, so `npm test` still passes without one.
+local libSQL file (a throwaway one, separate from your dev database) to
+exercise the raw-SQL overlap query — it skips itself with a console
+warning if that file can't be opened, so `npm test` still passes even in
+a restricted sandbox.
 
 ### Everything via Docker
 
@@ -205,16 +235,18 @@ reachable, so `npm test` still passes without one.
 docker compose up --build
 ```
 
-Brings up Postgres and Redis with health checks, then `pawmates-api` —
-whose container command runs the migration (against the *compiled*
-`data-source.js`, no `ts-node` needed at runtime) and then starts the app,
-in that order, on every boot. Safe to repeat: TypeORM skips migrations
-already recorded as applied.
+Brings up Redis with a health check, then `pawmates-api` — whose
+container command runs the migration (against the *compiled*
+`data-source.js`, no `ts-node` needed at runtime, writing to a file on
+the `sqlite-data` volume) and then starts the app, in that order, on
+every boot. Safe to repeat: TypeORM skips migrations already recorded as
+applied.
 
 ### Deploying to Render
 
-[`render.yaml`](./render.yaml) deploys this same one-service-plus-two-
-managed-resources topology to Render, entirely on the free plan. See
+[`render.yaml`](./render.yaml) deploys the app plus a managed Redis to
+Render, entirely on the free plan — the database itself is your own
+Turso account, not a Render-managed resource. See
 [DEPLOY.md](./DEPLOY.md) for the one-time setup steps.
 
 ## Monorepo layout

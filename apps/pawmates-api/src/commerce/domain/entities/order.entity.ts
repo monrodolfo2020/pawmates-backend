@@ -17,12 +17,12 @@ import { bigintTransformer } from './bigint.transformer';
  * lives here so an invalid transition is caught by the entity itself, not
  * something the process manager has to remember to check.
  */
-@Entity({ name: 'orders', schema: 'commerce' })
+@Entity({ name: 'commerce_orders' })
 export class Order {
   @PrimaryColumn('text')
   id!: string;
 
-  @Column({ name: 'owner_id', type: 'uuid' })
+  @Column({ name: 'owner_id', type: 'text' })
   ownerId!: string;
 
   @Column({ name: 'storefront_id', type: 'text' })
@@ -31,7 +31,7 @@ export class Order {
   // Denormalized from Storefront at order time — lets OrderController list
   // "orders on my storefront" without a join, same rationale as Booking
   // denormalizing providerId onto every line.
-  @Column({ name: 'provider_id', type: 'uuid' })
+  @Column({ name: 'provider_id', type: 'text' })
   providerId!: string;
 
   @Column({ type: 'text' })
@@ -46,7 +46,7 @@ export class Order {
   // linked walk has finished — only then can the walker confirm delivery.
   @Column({
     name: 'delivery_window_open_at',
-    type: 'timestamptz',
+    type: 'datetime',
     nullable: true,
   })
   deliveryWindowOpenAt!: Date | null;
@@ -58,22 +58,22 @@ export class Order {
   })
   totalAmount!: number;
 
-  @Column({ name: 'total_currency', type: 'char', length: 3 })
+  @Column({ name: 'total_currency', type: 'text' })
   totalCurrency!: string;
 
   @Column({ name: 'idempotency_key', type: 'text' })
   idempotencyKey!: string;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
-  @Column({ name: 'paid_at', type: 'timestamptz', nullable: true })
+  @Column({ name: 'paid_at', type: 'datetime', nullable: true })
   paidAt!: Date | null;
 
-  @Column({ name: 'delivered_at', type: 'timestamptz', nullable: true })
+  @Column({ name: 'delivered_at', type: 'datetime', nullable: true })
   deliveredAt!: Date | null;
 
-  @Column({ name: 'refunded_at', type: 'timestamptz', nullable: true })
+  @Column({ name: 'refunded_at', type: 'datetime', nullable: true })
   refundedAt!: Date | null;
 
   @OneToMany(() => OrderLineItem, (line) => line.order, { cascade: true })

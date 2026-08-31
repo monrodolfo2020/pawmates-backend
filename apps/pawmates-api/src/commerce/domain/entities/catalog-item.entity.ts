@@ -10,7 +10,7 @@ import { bigintTransformer } from './bigint.transformer';
  * just reference data — the admin panel edits it directly via repository
  * calls, no saga needed.
  */
-@Entity({ name: 'catalog_items', schema: 'commerce' })
+@Entity({ name: 'commerce_catalog_items' })
 export class CatalogItem {
   @PrimaryColumn('text')
   id!: string;
@@ -31,7 +31,7 @@ export class CatalogItem {
   })
   suggestedPriceAmount!: number;
 
-  @Column({ name: 'suggested_price_currency', type: 'char', length: 3 })
+  @Column({ name: 'suggested_price_currency', type: 'text' })
   suggestedPriceCurrency!: string;
 
   // Base64, same tradeoff as Pet/ProviderVerification photos (see README) —
@@ -42,7 +42,7 @@ export class CatalogItem {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
   get suggestedPrice(): Money {

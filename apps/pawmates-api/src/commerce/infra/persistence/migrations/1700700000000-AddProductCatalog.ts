@@ -13,34 +13,37 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * originals written for this seed, not scraped from any real retailer.
  * No photos yet (`photo_base64` starts NULL): the platform admin adds
  * those through the admin panel once this ships.
+ *
+ * Same 100 rows as this migration's original Postgres version — only the
+ * table DDL changed for Turso/libSQL (see README's Database section).
  */
-export class AddProductCatalog1700300000000 implements MigrationInterface {
-  name = 'AddProductCatalog1700300000000';
+export class AddProductCatalog1700700000000 implements MigrationInterface {
+  name = 'AddProductCatalog1700700000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      CREATE TABLE commerce.catalog_items (
+      CREATE TABLE commerce_catalog_items (
         id text PRIMARY KEY,
         name text NOT NULL,
         description text NULL,
         category text NOT NULL,
         suggested_price_amount bigint NOT NULL,
-        suggested_price_currency char(3) NOT NULL,
+        suggested_price_currency text NOT NULL,
         photo_base64 text NULL,
         is_active boolean NOT NULL DEFAULT true,
-        created_at timestamptz NOT NULL DEFAULT now()
+        created_at datetime NOT NULL DEFAULT (datetime('now'))
       )
     `);
     await queryRunner.query(
-      `CREATE INDEX idx_catalog_items_category ON commerce.catalog_items (category)`,
+      `CREATE INDEX idx_catalog_items_category ON commerce_catalog_items (category)`,
     );
 
     await queryRunner.query(
-      `ALTER TABLE commerce.products ADD COLUMN catalog_item_id text NULL`,
+      `ALTER TABLE commerce_products ADD COLUMN catalog_item_id text NULL`,
     );
 
     await queryRunner.query(`
-      INSERT INTO commerce.catalog_items (id, name, category, suggested_price_amount, suggested_price_currency) VALUES
+      INSERT INTO commerce_catalog_items (id, name, category, suggested_price_amount, suggested_price_currency) VALUES
               ('cat_07be05176ccd4b1d9742c607a1b54388', 'Galletas de pollo deshidratado 200g', 'treat', 875, 'USD'),
               ('cat_15e47e6713e1420288c758ee0300858a', 'Snacks de salmón liofilizado 100g', 'treat', 825, 'USD'),
               ('cat_c9763881a46e4885ba1b6fd52f08eb87', 'Huesos de cuero prensado x3', 'treat', 1125, 'USD'),
@@ -146,8 +149,8 @@ export class AddProductCatalog1700300000000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
-      `ALTER TABLE commerce.products DROP COLUMN catalog_item_id`,
+      `ALTER TABLE commerce_products DROP COLUMN catalog_item_id`,
     );
-    await queryRunner.query(`DROP TABLE commerce.catalog_items`);
+    await queryRunner.query(`DROP TABLE commerce_catalog_items`);
   }
 }

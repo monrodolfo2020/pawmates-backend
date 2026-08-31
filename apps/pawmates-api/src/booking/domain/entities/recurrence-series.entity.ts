@@ -6,7 +6,7 @@ import type { RecurrenceRule } from '../value-objects/recurrence-rule';
  * rows via RecurrenceExpansionService; pausing/ending the series never
  * retroactively touches Booking rows already generated.
  */
-@Entity({ name: 'recurrence_series', schema: 'booking' })
+@Entity({ name: 'booking_recurrence_series' })
 export class RecurrenceSeries {
   // App-assigned ULID (see BookingProcessManager.createRecurringBooking),
   // not DB-generated — hence a plain @PrimaryColumn, not
@@ -14,18 +14,18 @@ export class RecurrenceSeries {
   @PrimaryColumn('text')
   id!: string;
 
-  @Column({ name: 'owner_id', type: 'uuid' })
+  @Column({ name: 'owner_id', type: 'text' })
   ownerId!: string;
 
-  @Column({ name: 'provider_id', type: 'uuid' })
+  @Column({ name: 'provider_id', type: 'text' })
   providerId!: string;
 
-  @Column({ type: 'jsonb' })
+  @Column({ type: 'simple-json' })
   rule!: RecurrenceRule;
 
   @Column({ type: 'text', default: 'active' })
   status!: 'active' | 'paused' | 'ended';
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 }

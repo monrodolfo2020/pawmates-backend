@@ -9,7 +9,7 @@ import { bigintTransformer } from './bigint.transformer';
  * RateCard changes afterward (Domain Model doc §10: "el precio
  * reservado es el precio pagado").
  */
-@Entity({ name: 'price_breakdowns', schema: 'booking' })
+@Entity({ name: 'booking_price_breakdowns' })
 export class PriceBreakdown {
   // Matches Booking.id's type — a ULID stored as `text`, not `uuid`.
   @PrimaryColumn('text', { name: 'booking_id' })
@@ -56,7 +56,7 @@ export class PriceBreakdown {
   })
   totalAmount!: number;
 
-  @Column({ type: 'char', length: 3 })
+  @Column({ type: 'text' })
   currency!: string;
 
   get total(): Money {

@@ -26,7 +26,7 @@ import { BookingStatus, canTransition } from '../value-objects/booking-status';
  * domain/policies/no-double-booking.policy.ts, not here — an entity
  * method never queries the database.
  */
-@Entity({ name: 'bookings', schema: 'booking' })
+@Entity({ name: 'booking_bookings' })
 export class Booking {
   // The migration declares the real DB primary key as the composite
   // (id, scheduled_at) — required by Postgres for a table partitioned by
@@ -40,10 +40,10 @@ export class Booking {
   @PrimaryColumn('text')
   id!: string;
 
-  @Column({ name: 'owner_id', type: 'uuid' })
+  @Column({ name: 'owner_id', type: 'text' })
   ownerId!: string;
 
-  @Column({ name: 'provider_id', type: 'uuid' })
+  @Column({ name: 'provider_id', type: 'text' })
   providerId!: string;
 
   @Column({ type: 'text' })
@@ -52,16 +52,16 @@ export class Booking {
   @Column({ name: 'recurrence_series_id', type: 'text', nullable: true })
   recurrenceSeriesId!: string | null;
 
-  @Column({ name: 'scheduled_at', type: 'timestamptz' })
+  @Column({ name: 'scheduled_at', type: 'datetime' })
   scheduledAt!: Date;
 
   @Column({ name: 'idempotency_key', type: 'text' })
   idempotencyKey!: string;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'datetime' })
   updatedAt!: Date;
 
   @OneToMany(() => BookingLine, (line) => line.booking, { cascade: true })

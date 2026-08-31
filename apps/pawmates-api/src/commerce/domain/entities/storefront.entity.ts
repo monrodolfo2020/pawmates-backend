@@ -10,13 +10,13 @@ import { ulid } from 'ulid';
  * constructed — this entity itself doesn't reach out to another Bounded
  * Context, same discipline as Booking.
  */
-@Entity({ name: 'storefronts', schema: 'commerce' })
+@Entity({ name: 'commerce_storefronts' })
 export class Storefront {
   // A ULID, not an RFC-4122 UUID — same convention as Booking.id.
   @PrimaryColumn('text')
   id!: string;
 
-  @Column({ name: 'provider_id', type: 'uuid', unique: true })
+  @Column({ name: 'provider_id', type: 'text', unique: true })
   providerId!: string;
 
   @Column({ type: 'text' })
@@ -28,7 +28,7 @@ export class Storefront {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
   static open(params: {

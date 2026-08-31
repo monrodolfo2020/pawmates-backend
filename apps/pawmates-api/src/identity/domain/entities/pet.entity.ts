@@ -14,12 +14,12 @@ import {
  * avoids the exact "wrong column type for a cross-context id" bug this
  * codebase already hit once with Order.deliveryBookingId.
  */
-@Entity({ name: 'pets', schema: 'identity' })
+@Entity({ name: 'identity_pets' })
 export class Pet {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @Column({ name: 'owner_id', type: 'uuid' })
+  @Column({ name: 'owner_id', type: 'text' })
   ownerId!: string;
 
   @Column({ type: 'text' })
@@ -31,18 +31,18 @@ export class Pet {
   @Column({ type: 'text' })
   size!: string;
 
-  @Column({ type: 'jsonb' })
+  @Column({ type: 'simple-json' })
   temperament!: string[];
 
-  @Column({ type: 'jsonb' })
+  @Column({ type: 'simple-json' })
   vaccines!: string[];
 
   @Column({ name: 'photo_base64', type: 'text', nullable: true })
   photoBase64!: string | null;
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
-  @UpdateDateColumn({ name: 'updated_at', type: 'timestamptz' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'datetime' })
   updatedAt!: Date;
 }

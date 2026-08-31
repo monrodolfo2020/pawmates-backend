@@ -13,7 +13,7 @@ export type Role = 'owner' | 'provider' | 'admin';
  * owner/provider mode toggle). `roles` starts with whatever the account
  * signed up as; POST /v1/auth/roles appends more later.
  */
-@Entity({ name: 'accounts', schema: 'identity' })
+@Entity({ name: 'identity_accounts' })
 export class Account {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -27,10 +27,10 @@ export class Account {
   @Column({ type: 'text', nullable: true })
   name!: string | null;
 
-  @Column({ type: 'jsonb' })
+  @Column({ type: 'simple-json' })
   roles!: Role[];
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
   hasRole(role: Role): boolean {

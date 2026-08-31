@@ -12,7 +12,7 @@ import { Booking } from './booking.entity';
  * within a Booking — this is what makes multi-mascota / multi-servicio
  * reservations possible without a wider Booking table.
  */
-@Entity({ name: 'booking_lines', schema: 'booking' })
+@Entity({ name: 'booking_booking_lines' })
 export class BookingLine {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -27,7 +27,7 @@ export class BookingLine {
   @JoinColumn({ name: 'booking_id' })
   booking!: Booking;
 
-  @Column({ name: 'pet_id', type: 'uuid' })
+  @Column({ name: 'pet_id', type: 'text' })
   petId!: string;
 
   @Column({ name: 'service_type_code', type: 'text' })
@@ -39,6 +39,6 @@ export class BookingLine {
   @Column({ name: 'duration_unit', type: 'text' })
   durationUnit!: 'min' | 'hour' | 'day';
 
-  @Column({ name: 'address_id', type: 'uuid' })
+  @Column({ name: 'address_id', type: 'text' })
   addressId!: string;
 }

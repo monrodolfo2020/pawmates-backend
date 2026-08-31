@@ -1,5 +1,5 @@
 import { OutboxEventBase } from '@pawmates/common';
 import { Entity } from 'typeorm';
 
-@Entity({ name: 'outbox_events', schema: 'commerce' })
+@Entity({ name: 'commerce_outbox_events' })
 export class OutboxEvent extends OutboxEventBase {}

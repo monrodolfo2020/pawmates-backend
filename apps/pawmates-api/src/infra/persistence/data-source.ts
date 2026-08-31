@@ -16,22 +16,18 @@ import { Storefront } from '../../commerce/domain/entities/storefront.entity';
 import { Account } from '../../identity/domain/entities/account.entity';
 import { Pet } from '../../identity/domain/entities/pet.entity';
 import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
+import { libsqlConnectionOptions } from './libsql-connection';
 
 /**
  * Used only by the TypeORM CLI (`npm run migration:run:pawmates-api`) and
  * by tests that spin up a real schema — the app itself gets its
  * connection via TypeOrmModule.forRoot in app.module.ts. Covers every
- * Bounded Context's migrations; they create separate schemas
- * (`identity.*` / `booking.*` / `commerce.*`) so there's no collision
- * running them from one DataSource.
+ * Bounded Context's migrations; table names are prefixed per context
+ * (`identity_*` / `booking_*` / `commerce_*`) since SQLite/libSQL has no
+ * schema concept to separate them the way Postgres did.
  */
 const pawmatesDataSource = new DataSource({
-  type: 'postgres',
-  host: process.env.DB_HOST ?? 'localhost',
-  port: Number(process.env.DB_PORT ?? 5432),
-  username: process.env.DB_USER ?? 'postgres',
-  password: process.env.DB_PASSWORD ?? 'postgres',
-  database: process.env.DB_NAME ?? 'pawmates',
+  ...libsqlConnectionOptions(),
   entities: [
     Account,
     Pet,

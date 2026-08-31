@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import * as fs from 'fs';
 import { DataSource } from 'typeorm';
 import { BookingProviderDoubleBookedError } from '@pawmates/common';
 import { Booking } from '../entities/booking.entity';
@@ -10,18 +11,19 @@ import { RecurrenceSeries } from '../entities/recurrence-series.entity';
 import { RescheduleRequest } from '../entities/reschedule-request.entity';
 import { BookingStatus } from '../value-objects/booking-status';
 import { NoDoubleBookingPolicy } from './no-double-booking.policy';
+import { libsqlConnectionOptions } from '../../../infra/persistence/libsql-connection';
 
 /**
- * Integration test against a real local Postgres — the overlap detection
- * in NoDoubleBookingPolicy relies on a raw-SQL join over booking_lines
- * that a mocked QueryBuilder can't meaningfully exercise. Requires the
- * `booking` schema from CreateBookingSchema1700000000000 to already exist
- * (`npm run migration:run:booking-svc`); skips itself with a warning if
- * no database is reachable so `npm test` still passes in environments
- * without Postgres running (see task #8, docker-compose for CI).
+ * Integration test against a real local libSQL file — the overlap
+ * detection in NoDoubleBookingPolicy relies on a raw-SQL join over
+ * booking_lines (plus SQLite-specific datetime() arithmetic) that a
+ * mocked QueryBuilder can't meaningfully exercise. Uses its own throwaway
+ * file (not the app's dev database) and creates the two tables it needs
+ * directly rather than running the full migration set.
  */
 const PROVIDER_1 = '00000000-0000-0000-0000-000000000101';
 const PROVIDER_2 = '00000000-0000-0000-0000-000000000102';
+const TEST_DB_FILE = './no-double-booking.policy.integration.test.db';
 
 describe('NoDoubleBookingPolicy (integration)', () => {
   let dataSource: DataSource;
@@ -29,13 +31,10 @@ describe('NoDoubleBookingPolicy (integration)', () => {
   let dbAvailable = true;
 
   beforeAll(async () => {
+    try { fs.unlinkSync(TEST_DB_FILE); } catch {}
     dataSource = new DataSource({
-      type: 'postgres',
-      host: process.env.DB_HOST ?? '127.0.0.1',
-      port: Number(process.env.DB_PORT ?? 5432),
-      username: process.env.DB_USER ?? 'postgres',
-      password: process.env.DB_PASSWORD ?? 'postgres',
-      database: process.env.DB_NAME ?? 'pawmates',
+      ...libsqlConnectionOptions(),
+      database: TEST_DB_FILE,
       entities: [
         Booking,
         BookingLine,
@@ -48,25 +47,40 @@ describe('NoDoubleBookingPolicy (integration)', () => {
     });
     try {
       await dataSource.initialize();
+      await dataSource.query(`
+        CREATE TABLE booking_bookings (
+          id text PRIMARY KEY, owner_id text NOT NULL, provider_id text NOT NULL,
+          status text NOT NULL, recurrence_series_id text NULL, scheduled_at datetime NOT NULL,
+          idempotency_key text NOT NULL, created_at datetime NOT NULL DEFAULT (datetime('now')),
+          updated_at datetime NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+      await dataSource.query(`
+        CREATE TABLE booking_booking_lines (
+          id text PRIMARY KEY, booking_id text NOT NULL, pet_id text NOT NULL,
+          service_type_code text NOT NULL, duration_value int NOT NULL,
+          duration_unit text NOT NULL, address_id text NOT NULL
+        )
+      `);
       policy = new NoDoubleBookingPolicy(dataSource.getRepository(Booking));
     } catch (err) {
       dbAvailable = false;
 
       console.warn(
-        `Skipping NoDoubleBookingPolicy integration tests — no reachable Postgres (${(err as Error).message})`,
+        `Skipping NoDoubleBookingPolicy integration tests — could not open local libSQL file (${(err as Error).message})`,
       );
     }
   });
 
   afterAll(async () => {
     if (dbAvailable) await dataSource.destroy();
+    try { fs.unlinkSync(TEST_DB_FILE); } catch {}
   });
 
   beforeEach(async () => {
     if (!dbAvailable) return;
-    await dataSource.query(
-      'TRUNCATE booking.booking_lines, booking.bookings CASCADE',
-    );
+    await dataSource.query('DELETE FROM booking_booking_lines');
+    await dataSource.query('DELETE FROM booking_bookings');
   });
 
   async function seedBooking(params: {

@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 import { Booking } from './booking.entity';
 
-@Entity({ name: 'reschedule_requests', schema: 'booking' })
+@Entity({ name: 'booking_reschedule_requests' })
 export class RescheduleRequest {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -23,15 +23,15 @@ export class RescheduleRequest {
   @JoinColumn({ name: 'booking_id' })
   booking!: Booking;
 
-  @Column({ name: 'proposed_start', type: 'timestamptz' })
+  @Column({ name: 'proposed_start', type: 'datetime' })
   proposedStart!: Date;
 
-  @Column({ name: 'requested_by', type: 'uuid' })
+  @Column({ name: 'requested_by', type: 'text' })
   requestedBy!: string;
 
   @Column({ type: 'text', default: 'pending' })
   status!: 'pending' | 'accepted' | 'rejected';
 
-  @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 }

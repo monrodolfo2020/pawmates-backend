@@ -1,22 +1,10 @@
 name: pawmates-backend
 
+# The database is a local libSQL file (or, with TURSO_DATABASE_URL set,
+# Turso itself) — see README's Database section. Unlike Postgres, that
+# needs no separate service: just a volume so the file survives a
+# container restart.
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: pawmates
-    ports:
-      - '5432:5432'
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   redis:
     image: redis:7-alpine
     ports:
@@ -33,21 +21,20 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     ports:
       - '3000:3000'
     environment:
       PORT: 3000
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: pawmates
+      SQLITE_LOCAL_PATH: /data/pawmates.db
+      # To point this at Turso instead of the local file, set
+      # TURSO_DATABASE_URL / TURSO_AUTH_TOKEN here (they take priority
+      # over SQLITE_LOCAL_PATH — see libsql-connection.ts).
       REDIS_URL: redis://redis:6379
       JWT_SECRET: dev-secret-change-me
+    volumes:
+      - sqlite-data:/data
 
 volumes:
-  postgres-data:
+  sqlite-data:

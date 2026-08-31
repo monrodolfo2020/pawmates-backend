@@ -15,7 +15,7 @@ import { bigintTransformer } from './bigint.transformer';
  * precio reservado es el precio pagado" — a later price or name change on
  * the Product must never alter a past Order).
  */
-@Entity({ name: 'order_line_items', schema: 'commerce' })
+@Entity({ name: 'commerce_order_line_items' })
 export class OrderLineItem {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -40,7 +40,7 @@ export class OrderLineItem {
   })
   unitPriceAmount!: number;
 
-  @Column({ name: 'unit_price_currency', type: 'char', length: 3 })
+  @Column({ name: 'unit_price_currency', type: 'text' })
   unitPriceCurrency!: string;
 
   @Column({ type: 'int' })

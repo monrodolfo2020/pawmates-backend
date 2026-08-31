@@ -22,6 +22,7 @@ import { IdentityModule } from './identity/identity.module';
 import { Account } from './identity/domain/entities/account.entity';
 import { Pet } from './identity/domain/entities/pet.entity';
 import { ProviderVerification } from './identity/domain/entities/provider-verification.entity';
+import { libsqlConnectionOptions } from './infra/persistence/libsql-connection';
 import { TripsController } from './trips/trips.controller';
 
 /**
@@ -39,12 +40,7 @@ import { TripsController } from './trips/trips.controller';
       secret: process.env.JWT_SECRET ?? 'dev-secret-change-me',
     }),
     TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST ?? 'localhost',
-      port: Number(process.env.DB_PORT ?? 5432),
-      username: process.env.DB_USER ?? 'postgres',
-      password: process.env.DB_PASSWORD ?? 'postgres',
-      database: process.env.DB_NAME ?? 'pawmates',
+      ...libsqlConnectionOptions(),
       entities: [
         Account,
         Pet,
