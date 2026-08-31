@@ -1,5 +1,6 @@
 {
   "buildCommand": "npm run build && npm run migration:run:pawmates-api",
+  "outputDirectory": "public",
   "rewrites": [{ "source": "/(.*)", "destination": "/api/index" }],
   "functions": {
     "api/index.js": {
