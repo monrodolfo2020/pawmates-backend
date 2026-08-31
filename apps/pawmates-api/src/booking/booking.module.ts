@@ -9,6 +9,8 @@ import { OutboxEvent } from './domain/entities/outbox-event.entity';
 import { PriceBreakdown } from './domain/entities/price-breakdown.entity';
 import { RecurrenceSeries } from './domain/entities/recurrence-series.entity';
 import { RescheduleRequest } from './domain/entities/reschedule-request.entity';
+import { TripLocation } from './domain/entities/trip-location.entity';
+import { WalkEvent } from './domain/entities/walk-event.entity';
 import { NoDoubleBookingPolicy } from './domain/policies/no-double-booking.policy';
 import { MARKETPLACE_PORT } from './domain/ports/marketplace.port';
 import { PAYMENTS_PORT } from './domain/ports/payments.port';
@@ -37,6 +39,8 @@ import { FakeTrustSafetyAdapter } from './infra/adapters/fake-trust-safety.adapt
       PriceBreakdown,
       RecurrenceSeries,
       RescheduleRequest,
+      TripLocation,
+      WalkEvent,
       OutboxEvent,
       IdempotencyKey,
     ]),

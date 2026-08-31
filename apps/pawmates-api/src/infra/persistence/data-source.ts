@@ -8,6 +8,8 @@ import { OutboxEvent as BookingOutboxEvent } from '../../booking/domain/entities
 import { PriceBreakdown } from '../../booking/domain/entities/price-breakdown.entity';
 import { RecurrenceSeries } from '../../booking/domain/entities/recurrence-series.entity';
 import { RescheduleRequest } from '../../booking/domain/entities/reschedule-request.entity';
+import { TripLocation } from '../../booking/domain/entities/trip-location.entity';
+import { WalkEvent } from '../../booking/domain/entities/walk-event.entity';
 import { CatalogItem } from '../../commerce/domain/entities/catalog-item.entity';
 import { OrderLineItem } from '../../commerce/domain/entities/order-line-item.entity';
 import { Order } from '../../commerce/domain/entities/order.entity';
@@ -39,6 +41,8 @@ const pawmatesDataSource = new DataSource({
     PriceBreakdown,
     RecurrenceSeries,
     RescheduleRequest,
+    TripLocation,
+    WalkEvent,
     BookingOutboxEvent,
     Storefront,
     Product,

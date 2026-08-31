@@ -58,6 +58,15 @@ export class Booking {
   @Column({ name: 'idempotency_key', type: 'text' })
   idempotencyKey!: string;
 
+  // Set by start()/complete() below — the Report Card's duration is
+  // completedAt - startedAt, not derived from updatedAt (which every
+  // status transition bumps, not just these two).
+  @Column({ name: 'started_at', type: 'datetime', nullable: true })
+  startedAt!: Date | null;
+
+  @Column({ name: 'completed_at', type: 'datetime', nullable: true })
+  completedAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
@@ -98,6 +107,8 @@ export class Booking {
     booking.idempotencyKey = params.idempotencyKey;
     booking.recurrenceSeriesId = params.recurrenceSeriesId ?? null;
     booking.status = BookingStatus.Requested;
+    booking.startedAt = null;
+    booking.completedAt = null;
     booking.lines = params.lines.map((line) => {
       const l = new BookingLine();
       Object.assign(l, line);
@@ -126,10 +137,12 @@ export class Booking {
 
   start(): void {
     this.transitionTo(BookingStatus.InProgress);
+    this.startedAt = new Date();
   }
 
   complete(): void {
     this.transitionTo(BookingStatus.Completed);
+    this.completedAt = new Date();
   }
 
   /** Policy P-15: no cancelling once the service is in progress. */

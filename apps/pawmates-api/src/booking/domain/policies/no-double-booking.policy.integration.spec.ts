@@ -51,7 +51,8 @@ describe('NoDoubleBookingPolicy (integration)', () => {
         CREATE TABLE booking_bookings (
           id text PRIMARY KEY, owner_id text NOT NULL, provider_id text NOT NULL,
           status text NOT NULL, recurrence_series_id text NULL, scheduled_at datetime NOT NULL,
-          idempotency_key text NOT NULL, created_at datetime NOT NULL DEFAULT (datetime('now')),
+          idempotency_key text NOT NULL, started_at datetime NULL, completed_at datetime NULL,
+          created_at datetime NOT NULL DEFAULT (datetime('now')),
           updated_at datetime NOT NULL DEFAULT (datetime('now'))
         )
       `);

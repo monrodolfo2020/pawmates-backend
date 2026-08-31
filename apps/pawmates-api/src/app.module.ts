@@ -12,6 +12,8 @@ import { OutboxEvent as BookingOutboxEvent } from './booking/domain/entities/out
 import { PriceBreakdown } from './booking/domain/entities/price-breakdown.entity';
 import { RecurrenceSeries } from './booking/domain/entities/recurrence-series.entity';
 import { RescheduleRequest } from './booking/domain/entities/reschedule-request.entity';
+import { TripLocation } from './booking/domain/entities/trip-location.entity';
+import { WalkEvent } from './booking/domain/entities/walk-event.entity';
 import { CommerceModule } from './commerce/commerce.module';
 import { CatalogItem } from './commerce/domain/entities/catalog-item.entity';
 import { OrderLineItem } from './commerce/domain/entities/order-line-item.entity';
@@ -52,6 +54,8 @@ import { TripsController } from './trips/trips.controller';
         PriceBreakdown,
         RecurrenceSeries,
         RescheduleRequest,
+        TripLocation,
+        WalkEvent,
         BookingOutboxEvent,
         Storefront,
         Product,
