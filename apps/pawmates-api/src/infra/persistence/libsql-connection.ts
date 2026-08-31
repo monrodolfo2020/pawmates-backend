@@ -24,7 +24,20 @@ export function libsqlConnectionOptions(): Pick<
 > {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const LibsqlDatabase = require('better-sqlite3');
-  const tursoUrl = process.env.TURSO_DATABASE_URL;
+  // `libsql://` (what Turso hands out) selects libsql's WebSocket-based
+  // Hrana transport, which keeps one persistent stream open for the life
+  // of the Database object. Fine for a long-running server, but that
+  // stream goes stale during any real idle gap — which happens constantly
+  // once deployed (serverless cold-starts/freezes, but also just normal
+  // low-traffic gaps) — and every query after that fails with "stream not
+  // found" until the process restarts. Turso's own guidance for exactly
+  // this failure mode: use the stateless HTTP Hrana transport instead by
+  // swapping the scheme to `https://` — no persistent stream, so nothing
+  // to go stale between queries.
+  const tursoUrl = process.env.TURSO_DATABASE_URL?.replace(
+    /^libsql:\/\//,
+    'https://',
+  );
   const authToken = process.env.TURSO_AUTH_TOKEN;
 
   // A plain `function`, not an arrow — TypeORM's BetterSqlite3Driver
