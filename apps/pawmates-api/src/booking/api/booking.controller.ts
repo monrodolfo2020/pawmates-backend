@@ -2,6 +2,7 @@ import {
   CurrentAccount,
   IdempotencyInterceptor,
   JwtAuthGuard,
+  RoleRequiredError,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import {
@@ -19,6 +20,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { ulid } from 'ulid';
 import { Repository } from 'typeorm';
 import { Booking } from '../domain/entities/booking.entity';
+import { BookingMessage } from '../domain/entities/booking-message.entity';
 import { BookingProcessManager } from '../domain/saga/booking-process-manager';
 import type { RecurrenceRule } from '../domain/value-objects/recurrence-rule';
 import {
@@ -29,6 +31,7 @@ import {
 } from './dto/booking-actions.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CreateRecurringBookingDto } from './dto/create-recurring-booking.dto';
+import { SendMessageDto } from './dto/send-message.dto';
 
 /** Mirrors API Design doc §04 (owner-bff) and §05 (provider-bff) Booking endpoints. */
 @Controller('v1/bookings')
@@ -37,6 +40,8 @@ export class BookingController {
   constructor(
     private readonly processManager: BookingProcessManager,
     @InjectRepository(Booking) private readonly bookings: Repository<Booking>,
+    @InjectRepository(BookingMessage)
+    private readonly messages: Repository<BookingMessage>,
   ) {}
 
   @Post()
@@ -191,6 +196,64 @@ export class BookingController {
     );
     return { data: { status: 'pending' } };
   }
+
+  /**
+   * Owner/paseador chat thread for this Booking. Polled, not pushed — no
+   * WebSocket gateway in this consolidated MVP, same reasoning as the
+   * live-trip map polling GET /v1/trips/:id (see that controller).
+   *
+   * senderRole comes from activeContext (the same header/mode-toggle
+   * `list()` above already keys off of), not a strict participant check
+   * against this booking's own owner_id/provider_id — matching
+   * accept/reject/cancel and the trip endpoints' existing looseness here
+   * (see FakeMarketplaceAdapter's comment for why a strict check isn't
+   * meaningful yet without a real Marketplace assigning real providers).
+   */
+  @Post(':id/messages')
+  async sendMessage(
+    @Param('id') id: string,
+    @Body() dto: SendMessageDto,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    const message = BookingMessage.send({
+      bookingId: id,
+      senderId: account.accountId,
+      senderRole: account.activeContext,
+      text: dto.text,
+    });
+    await this.messages.save(message);
+    return { data: toMessageResponse(message) };
+  }
+
+  @Get(':id/messages')
+  async listMessages(
+    @Param('id') id: string,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    const booking = await this.bookings.findOneOrFail({ where: { id } });
+    if (
+      booking.ownerId !== account.accountId &&
+      booking.providerId !== account.accountId &&
+      !account.roles.includes('admin')
+    ) {
+      throw new RoleRequiredError('No tienes acceso a esta conversación.');
+    }
+    const rows = await this.messages.find({
+      where: { bookingId: id },
+      order: { sentAt: 'ASC' },
+    });
+    return { data: rows.map(toMessageResponse) };
+  }
+}
+
+function toMessageResponse(message: BookingMessage) {
+  return {
+    id: message.id,
+    senderId: message.senderId,
+    senderRole: message.senderRole,
+    text: message.text,
+    sentAt: message.sentAt,
+  };
 }
 
 function toBookingResponse(booking: Booking) {

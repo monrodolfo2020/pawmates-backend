@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BookingController } from './api/booking.controller';
 import { Booking } from './domain/entities/booking.entity';
 import { BookingLine } from './domain/entities/booking-line.entity';
+import { BookingMessage } from './domain/entities/booking-message.entity';
 import { CancellationRecord } from './domain/entities/cancellation-record.entity';
 import { OutboxEvent } from './domain/entities/outbox-event.entity';
 import { PriceBreakdown } from './domain/entities/price-breakdown.entity';
@@ -41,6 +42,7 @@ import { FakeTrustSafetyAdapter } from './infra/adapters/fake-trust-safety.adapt
       RescheduleRequest,
       TripLocation,
       WalkEvent,
+      BookingMessage,
       OutboxEvent,
       IdempotencyKey,
     ]),
