@@ -1,28 +1,16 @@
 name: pawmates-backend
 
 # The database is a local libSQL file (or, with TURSO_DATABASE_URL set,
-# Turso itself) — see README's Database section. Unlike Postgres, that
-# needs no separate service: just a volume so the file survives a
-# container restart.
+# Turso itself) — see README's Database section. No separate database
+# service, and no Redis either (the idempotency cache that used to need
+# it now lives in the same database — see README) — just this one
+# container plus a volume so the db file survives a restart.
 services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - '6379:6379'
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
   pawmates-api:
     build:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    depends_on:
-      redis:
-        condition: service_healthy
     ports:
       - '3000:3000'
     environment:
@@ -31,7 +19,6 @@ services:
       # To point this at Turso instead of the local file, set
       # TURSO_DATABASE_URL / TURSO_AUTH_TOKEN here (they take priority
       # over SQLITE_LOCAL_PATH — see libsql-connection.ts).
-      REDIS_URL: redis://redis:6379
       JWT_SECRET: dev-secret-change-me
     volumes:
       - sqlite-data:/data

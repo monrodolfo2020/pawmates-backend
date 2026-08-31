@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { IdempotencyKey } from '@pawmates/common';
 import { DataSource } from 'typeorm';
 import { BookingLine } from '../../booking/domain/entities/booking-line.entity';
 import { Booking } from '../../booking/domain/entities/booking.entity';
@@ -45,11 +46,13 @@ const pawmatesDataSource = new DataSource({
     Order,
     OrderLineItem,
     CommerceOutboxEvent,
+    IdempotencyKey,
   ],
   migrations: [
     __dirname + '/../../identity/infra/persistence/migrations/*.{ts,js}',
     __dirname + '/../../booking/infra/persistence/migrations/*.{ts,js}',
     __dirname + '/../../commerce/infra/persistence/migrations/*.{ts,js}',
+    __dirname + '/migrations/*.{ts,js}',
   ],
   migrationsTableName: 'migrations_pawmates',
 });

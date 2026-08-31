@@ -1,4 +1,4 @@
-import { IDEMPOTENCY_SERVICE_NAME } from '@pawmates/common';
+import { IDEMPOTENCY_SERVICE_NAME, IdempotencyKey } from '@pawmates/common';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BookingController } from './api/booking.controller';
@@ -17,7 +17,6 @@ import { BookingProcessManager } from './domain/saga/booking-process-manager';
 import { FakeMarketplaceAdapter } from './infra/adapters/fake-marketplace.adapter';
 import { FakeBookingPaymentsAdapter } from './infra/adapters/fake-payments.adapter';
 import { FakeTrustSafetyAdapter } from './infra/adapters/fake-trust-safety.adapter';
-import { RedisProvider } from '../infra/redis.provider';
 
 /**
  * Booking Bounded Context. Consolidated-MVP shape (see README): the three
@@ -39,13 +38,13 @@ import { RedisProvider } from '../infra/redis.provider';
       RecurrenceSeries,
       RescheduleRequest,
       OutboxEvent,
+      IdempotencyKey,
     ]),
   ],
   controllers: [BookingController],
   providers: [
     BookingProcessManager,
     NoDoubleBookingPolicy,
-    RedisProvider,
     FakeMarketplaceAdapter,
     FakeTrustSafetyAdapter,
     FakeBookingPaymentsAdapter,

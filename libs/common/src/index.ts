@@ -6,4 +6,5 @@ export * from './persistence/outbox-event.base';
 export * from './auth/jwt-auth.guard';
 export * from './auth/current-account.decorator';
 export * from './idempotency/idempotency.interceptor';
-export * from './idempotency/redis.token';
+export * from './idempotency/idempotency-key.entity';
+export * from './idempotency/service-name.token';

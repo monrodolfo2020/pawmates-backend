@@ -1,4 +1,4 @@
-import { IDEMPOTENCY_SERVICE_NAME } from '@pawmates/common';
+import { IDEMPOTENCY_SERVICE_NAME, IdempotencyKey } from '@pawmates/common';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrderController } from './api/order.controller';
@@ -19,7 +19,6 @@ import { FakeCommercePaymentsAdapter } from './infra/adapters/fake-payments.adap
 import { FakeTrustSafetyAdapter } from './infra/adapters/fake-trust-safety.adapter';
 import { InProcessBookingAdapter } from './infra/adapters/in-process-booking.adapter';
 import { BookingModule } from '../booking/booking.module';
-import { RedisProvider } from '../infra/redis.provider';
 
 /**
  * Commerce Bounded Context (PawMates Commerce — walker storefronts).
@@ -39,13 +38,13 @@ import { RedisProvider } from '../infra/redis.provider';
       Order,
       OrderLineItem,
       OutboxEvent,
+      IdempotencyKey,
     ]),
   ],
   controllers: [StorefrontController, ProductController, OrderController],
   providers: [
     CommerceProcessManager,
     RequiresUpcomingBookingPolicy,
-    RedisProvider,
     FakeTrustSafetyAdapter,
     FakeCommercePaymentsAdapter,
     InProcessBookingAdapter,

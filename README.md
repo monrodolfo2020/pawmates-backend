@@ -102,7 +102,7 @@ is the provider-facing subset, active only).
 Full request→response flow, end to end: `POST /v1/bookings` → accept →
 `POST /v1/trips/:id/start|complete` → `POST /v1/orders` → confirm
 delivery. Exercised live (see git history / this MVP's development) with
-a real Turso/libSQL database and Redis, not just unit-tested.
+a real Turso/libSQL database, not just unit-tested.
 
 ## Architecture
 
@@ -135,8 +135,11 @@ apps/pawmates-api/src/
     trips.controller.ts   # POST /v1/trips/:id/start|complete — replaces
                             # gps-svc + the Kafka events it used to publish
   infra/
-    redis.provider.ts
-    persistence/data-source.ts  # combined DataSource for the migration CLI
+    persistence/
+      libsql-connection.ts  # shared Turso/libSQL TypeORM connection options
+      data-source.ts        # combined DataSource for the migration CLI
+  main.ts          # app.listen() entrypoint — Render/Docker
+  serverless.ts    # same app, exported as a handler instead — Vercel
 ```
 
 - **Saga, not choreography**: `BookingProcessManager` explicitly
@@ -200,19 +203,21 @@ now a table-name prefix instead (`identity_accounts`, `booking_bookings`,
 — any existing data in a previous Postgres deployment does not carry over
 automatically. See DEPLOY.md.
 
+**No Redis either.** The idempotency cache (see IdempotencyInterceptor)
+used to be a Redis hash; it's now a plain `idempotency_keys` table in the
+same database instead — one less service to run, and it works cleanly
+with the Vercel deployment below, where a serverless function holding a
+persistent Redis connection is awkward.
+
 ## Prerequisites
 
-- Node.js 20+
-- Redis 7 — or Docker, to run it via compose. (No separate database
-  server to install — see Database section above.)
+- Node.js 20+ — that's it. No separate database or cache server to
+  install (see Database section above).
 
 ## Setup
 
 ```bash
 npm install
-
-# Start Redis only (the app runs on your host instead):
-docker compose up -d redis
 
 # Run the migration — writes to ./pawmates-local.db by default, no
 # Turso account needed for local dev:
@@ -235,19 +240,44 @@ a restricted sandbox.
 docker compose up --build
 ```
 
-Brings up Redis with a health check, then `pawmates-api` — whose
-container command runs the migration (against the *compiled*
-`data-source.js`, no `ts-node` needed at runtime, writing to a file on
-the `sqlite-data` volume) and then starts the app, in that order, on
-every boot. Safe to repeat: TypeORM skips migrations already recorded as
-applied.
+`pawmates-api`'s container command runs the migration (against the
+*compiled* `data-source.js`, no `ts-node` needed at runtime, writing to a
+file on the `sqlite-data` volume) and then starts the app, in that order,
+on every boot. Safe to repeat: TypeORM skips migrations already recorded
+as applied.
 
 ### Deploying to Render
 
-[`render.yaml`](./render.yaml) deploys the app plus a managed Redis to
-Render, entirely on the free plan — the database itself is your own
-Turso account, not a Render-managed resource. See
-[DEPLOY.md](./DEPLOY.md) for the one-time setup steps.
+[`render.yaml`](./render.yaml) deploys the app to Render, entirely on the
+free plan — the database itself is your own Turso account, not a
+Render-managed resource. See [DEPLOY.md](./DEPLOY.md) for the one-time
+setup steps.
+
+### Deploying to Vercel
+
+[`vercel.json`](./vercel.json) deploys the same app as a Vercel
+serverless function instead — [`api/index.js`](./api/index.js) is a thin
+wrapper that boots the compiled Nest app (via `ExpressAdapter`) once per
+warm container and forwards every request to it
+(`apps/pawmates-api/src/serverless.ts` is the actual bootstrap; `main.ts`,
+used by Render/Docker, is the `app.listen()` equivalent). A catch-all
+rewrite sends every path to that one function, so the API's URLs
+(`/health`, `/v1/...`) are unchanged.
+
+`vercel.json`'s `buildCommand` runs `npm run build` (compiling with
+`nest build`, exactly like Docker does — deliberately *not* letting
+Vercel's own bundler touch the Nest/TypeORM decorator-laden TypeScript
+directly, since its default bundler isn't guaranteed to honor
+`emitDecoratorMetadata` or this repo's monorepo path aliases the way
+`nest build` does) and then the migration, same as Render's Docker CMD.
+This means `TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` need to be set as
+Vercel project environment variables *before* the first deploy — see
+DEPLOY.md.
+
+This still works fine as a single Turso database shared with a Render
+deployment running in parallel (both just connect to the same Turso URL);
+it's not an either/or at the infrastructure level, only at the "which
+public URL does the frontend point at" level.
 
 ## Monorepo layout
 

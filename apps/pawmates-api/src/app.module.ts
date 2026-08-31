@@ -1,3 +1,4 @@
+import { IdempotencyKey } from '@pawmates/common';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -58,6 +59,7 @@ import { TripsController } from './trips/trips.controller';
         Order,
         OrderLineItem,
         CommerceOutboxEvent,
+        IdempotencyKey,
       ],
       synchronize: false, // schema owned by migrations
     }),
