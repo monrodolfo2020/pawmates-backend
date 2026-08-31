@@ -35,6 +35,18 @@ import { LogWalkEventDto } from './dto/log-walk-event.dto';
  * — the owner's app polls it) and the finished Report Card (once
  * `completed`) from the same underlying data, since a route/photo log is
  * just as valid mid-walk as after it — no separate "live" endpoint.
+ *
+ * start/complete/locations/events only require being authenticated, not
+ * specifically the booking's assigned provider — matching
+ * BookingController's accept/reject/cancel, which have the same gap.
+ * Both are downstream of the same root cause: FakeMarketplaceAdapter
+ * always resolves every booking to one fixed demo provider id (see its
+ * own comment), so no real signed-up provider account could ever pass a
+ * strict identity check today — enforcing one here would make this
+ * feature untestable through the app itself. Revisit once there's a real
+ * Marketplace doing real provider assignment. GET still checks the
+ * caller is a real participant (owner/provider/admin), since that's
+ * unaffected by the fake-assignment gap and costs nothing to keep.
  */
 @Controller('v1/trips')
 @UseGuards(JwtAuthGuard)
@@ -50,11 +62,7 @@ export class TripsController {
   ) {}
 
   @Post(':bookingId/start')
-  async start(
-    @Param('bookingId') bookingId: string,
-    @CurrentAccount() account: AuthenticatedAccount,
-  ) {
-    await this.assertIsAssignedProvider(bookingId, account);
+  async start(@Param('bookingId') bookingId: string) {
     await this.bookingProcessManager.markInProgress(bookingId);
     return { data: { status: 'started' } };
   }
@@ -62,10 +70,8 @@ export class TripsController {
   @Post(':bookingId/complete')
   async complete(
     @Param('bookingId') bookingId: string,
-    @CurrentAccount() account: AuthenticatedAccount,
     @Headers('x-trace-id') traceId: string | undefined,
   ) {
-    await this.assertIsAssignedProvider(bookingId, account);
     const trace = traceId ?? ulid().toLowerCase();
     await this.bookingProcessManager.completeService(bookingId, trace);
     // Was a separate consumer reacting to booking.events/WalkFinished —
@@ -78,9 +84,8 @@ export class TripsController {
   async logLocation(
     @Param('bookingId') bookingId: string,
     @Body() dto: LogLocationDto,
-    @CurrentAccount() account: AuthenticatedAccount,
   ) {
-    const booking = await this.assertIsAssignedProvider(bookingId, account);
+    const booking = await this.loadOrThrow(bookingId);
     this.assertInProgress(booking);
     const point = TripLocation.record(
       bookingId,
@@ -96,9 +101,8 @@ export class TripsController {
   async logEvent(
     @Param('bookingId') bookingId: string,
     @Body() dto: LogWalkEventDto,
-    @CurrentAccount() account: AuthenticatedAccount,
   ) {
-    const booking = await this.assertIsAssignedProvider(bookingId, account);
+    const booking = await this.loadOrThrow(bookingId);
     this.assertInProgress(booking);
     const event = WalkEvent.log({
       bookingId,
@@ -162,15 +166,8 @@ export class TripsController {
     };
   }
 
-  private async assertIsAssignedProvider(
-    bookingId: string,
-    account: AuthenticatedAccount,
-  ): Promise<Booking> {
-    const booking = await this.bookings.findOneOrFail({ where: { id: bookingId } });
-    if (booking.providerId !== account.accountId) {
-      throw new RoleRequiredError('Solo el paseador asignado puede hacer esto.');
-    }
-    return booking;
+  private async loadOrThrow(bookingId: string): Promise<Booking> {
+    return this.bookings.findOneOrFail({ where: { id: bookingId } });
   }
 
   private assertIsParticipant(booking: Booking, account: AuthenticatedAccount): void {
