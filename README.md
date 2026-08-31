@@ -246,38 +246,43 @@ file on the `sqlite-data` volume) and then starts the app, in that order,
 on every boot. Safe to repeat: TypeORM skips migrations already recorded
 as applied.
 
-### Deploying to Render
-
-[`render.yaml`](./render.yaml) deploys the app to Render, entirely on the
-free plan — the database itself is your own Turso account, not a
-Render-managed resource. See [DEPLOY.md](./DEPLOY.md) for the one-time
-setup steps.
-
 ### Deploying to Vercel
 
-[`vercel.json`](./vercel.json) deploys the same app as a Vercel
-serverless function instead — [`api/index.js`](./api/index.js) is a thin
+This is where the app actually runs today (`pawmates-backend-black.vercel.app`
+— the frontend's default `API_URL` points here, see that repo's
+`src/api/client.ts`). [`vercel.json`](./vercel.json) deploys it as a
+Vercel serverless function — [`api/index.js`](./api/index.js) is a thin
 wrapper that boots the compiled Nest app (via `ExpressAdapter`) once per
 warm container and forwards every request to it
-(`apps/pawmates-api/src/serverless.ts` is the actual bootstrap; `main.ts`,
-used by Render/Docker, is the `app.listen()` equivalent). A catch-all
-rewrite sends every path to that one function, so the API's URLs
-(`/health`, `/v1/...`) are unchanged.
+(`apps/pawmates-api/src/serverless.ts` is the actual bootstrap; `main.ts`
+is the `app.listen()` equivalent the now-retired Render deployment used).
+A catch-all rewrite sends every path to that one function, so the API's
+URLs (`/health`, `/v1/...`) are unchanged from before.
 
 `vercel.json`'s `buildCommand` runs `npm run build` (compiling with
-`nest build`, exactly like Docker does — deliberately *not* letting
-Vercel's own bundler touch the Nest/TypeORM decorator-laden TypeScript
-directly, since its default bundler isn't guaranteed to honor
-`emitDecoratorMetadata` or this repo's monorepo path aliases the way
-`nest build` does) and then the migration, same as Render's Docker CMD.
+`nest build` — deliberately *not* letting Vercel's own bundler touch the
+Nest/TypeORM decorator-laden TypeScript directly, since its default
+bundler isn't guaranteed to honor `emitDecoratorMetadata` or this repo's
+monorepo path aliases the way `nest build` does) and then the migration.
 This means `TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` need to be set as
 Vercel project environment variables *before* the first deploy — see
-DEPLOY.md.
+DEPLOY.md. Two Vercel-specific gotchas already hit and fixed here, worth
+knowing if this ever needs debugging again: `libsql`'s native binary
+isn't picked up by Vercel's file tracer by default (see `includeFiles` in
+`vercel.json`), and Turso's `libsql://` URL scheme selects a
+WebSocket-based transport whose persistent connection goes stale between
+serverless invocations — `libsqlConnectionOptions()` rewrites it to
+`https://` to use the stateless HTTP transport instead (see that file's
+comments).
 
-This still works fine as a single Turso database shared with a Render
-deployment running in parallel (both just connect to the same Turso URL);
-it's not an either/or at the infrastructure level, only at the "which
-public URL does the frontend point at" level.
+### Deploying to Render (retired)
+
+This project *was* deployed on Render — [`render.yaml`](./render.yaml)
+and the Render steps in [DEPLOY.md](./DEPLOY.md) are kept as a working
+reference (same Turso database, so reviving it is just re-adding the
+`TURSO_*` env vars to a fresh Render service) but nothing points at it
+anymore, and its `TURSO_AUTH_TOKEN` was invalidated along with every
+other pre-rotation token — see DEPLOY.md's token rotation note.
 
 ## Monorepo layout
 
