@@ -34,14 +34,29 @@ export function libsqlConnectionOptions(): Pick<
   // instead of the (irrelevant) implicit `this` — the same trick makes
   // this work if some other TypeORM code path ever calls it bare
   // (`this.sqlite(...)`, no `new`) instead, since an explicit return
-  // wins either way.
+  // wins either way. `path` is ignored in favor of the closed-over
+  // `tursoUrl` when one is set — see the `database` field below for why
+  // the driver can't just be handed `tursoUrl` as `path` directly.
   function driver(path: string, opts: Record<string, unknown>) {
-    return new LibsqlDatabase(path, tursoUrl ? { ...opts, authToken } : opts);
+    return new LibsqlDatabase(
+      tursoUrl ?? path,
+      tursoUrl ? { ...opts, authToken } : opts,
+    );
   }
 
   return {
     type: 'better-sqlite3',
-    database: tursoUrl ?? process.env.SQLITE_LOCAL_PATH ?? './pawmates-local.db',
+    // BetterSqlite3Driver.createDatabaseConnection() always runs
+    // fs.mkdir(path.dirname(this.options.database)) first (skipped only
+    // for the literal string ':memory:') — reasonable for a real file
+    // path, but path.dirname() on a `libsql://host` URL yields nonsense
+    // like `libsql:/`, which then fails to mkdir on Vercel's read-only
+    // filesystem. ':memory:' opts out of that codepath entirely; the
+    // driver function above still connects to the real tursoUrl via
+    // closure, ignoring this value.
+    database: tursoUrl
+      ? ':memory:'
+      : (process.env.SQLITE_LOCAL_PATH ?? './pawmates-local.db'),
     driver,
   };
 }
