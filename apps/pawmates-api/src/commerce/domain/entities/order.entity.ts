@@ -28,8 +28,12 @@ export class Order {
   @Column({ name: 'storefront_id', type: 'text' })
   storefrontId!: string;
 
-  // Denormalized from Storefront at order time — lets OrderController list
-  // "orders on my storefront" without a join, same rationale as Booking
+  // Which walker delivers this order — the provider on whichever upcoming
+  // Booking got attached (see attachDeliveryBooking below), not the
+  // store's own owner (the store is one platform-wide shop, not a
+  // per-walker one — see Storefront's comment). Empty string until a
+  // Booking is actually attached; lets OrderController list "orders I'm
+  // delivering" without a join once it is, same rationale as Booking
   // denormalizing providerId onto every line.
   @Column({ name: 'provider_id', type: 'text' })
   providerId!: string;
@@ -93,7 +97,6 @@ export class Order {
   static place(params: {
     ownerId: string;
     storefrontId: string;
-    providerId: string;
     idempotencyKey: string;
     lines: OrderLineItem[];
     total: Money;
@@ -102,7 +105,7 @@ export class Order {
     order.id = ulid().toLowerCase();
     order.ownerId = params.ownerId;
     order.storefrontId = params.storefrontId;
-    order.providerId = params.providerId;
+    order.providerId = ''; // set once a delivery Booking is attached — see below
     order.idempotencyKey = params.idempotencyKey;
     order.status = OrderStatus.PendingPayment;
     order.deliveryBookingId = null;
@@ -130,10 +133,14 @@ export class Order {
     this.paidAt = new Date();
   }
 
-  /** RequiresUpcomingBookingPolicy found a confirmed future Booking to deliver on. */
-  attachDeliveryBooking(bookingId: string): void {
+  /** RequiresUpcomingBookingPolicy found a confirmed future Booking to
+   * deliver on — providerId is that Booking's own provider, since this
+   * store has no fixed walker of its own (see this entity's providerId
+   * comment). */
+  attachDeliveryBooking(bookingId: string, providerId: string): void {
     this.transitionTo(OrderStatus.AwaitingDelivery);
     this.deliveryBookingId = bookingId;
+    this.providerId = providerId;
   }
 
   /** booking.events/WalkFinished for this Order's linked Booking. */

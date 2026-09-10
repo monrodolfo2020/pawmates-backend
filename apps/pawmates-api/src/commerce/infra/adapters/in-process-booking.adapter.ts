@@ -19,22 +19,28 @@ export class InProcessBookingAdapter implements BookingPort {
 
   async getUpcomingConfirmedBooking(params: {
     ownerId: string;
+  }): Promise<{
+    found: boolean;
+    bookingId: string;
     providerId: string;
-  }): Promise<{ found: boolean; bookingId: string; scheduledAt: Date | null }> {
+    scheduledAt: Date | null;
+  }> {
     const booking = await this.bookings.findOne({
       where: {
         ownerId: params.ownerId,
-        providerId: params.providerId,
         status: In([BookingStatus.Accepted, BookingStatus.Confirmed]),
         scheduledAt: MoreThan(new Date()),
       },
       order: { scheduledAt: 'ASC' },
     });
 
-    if (!booking) return { found: false, bookingId: '', scheduledAt: null };
+    if (!booking) {
+      return { found: false, bookingId: '', providerId: '', scheduledAt: null };
+    }
     return {
       found: true,
       bookingId: booking.id,
+      providerId: booking.providerId,
       scheduledAt: booking.scheduledAt,
     };
   }

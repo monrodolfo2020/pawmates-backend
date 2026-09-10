@@ -17,7 +17,13 @@ import { CommerceProcessManager } from '../domain/saga/commerce-process-manager'
 import { AddProductDto } from './dto/add-product.dto';
 import { OpenStorefrontDto } from './dto/open-storefront.dto';
 
-/** PawMates Commerce API — a walker's own storefront and its catalog. */
+/**
+ * PawMates Commerce API — one platform-wide store (not a walker's own
+ * shop — see Storefront's comment) and its admin-curated catalog. An
+ * owner's order still gets delivered by a walker, just whichever one
+ * their next confirmed booking happens to be with, not a fixed shop
+ * owner (see RequiresUpcomingBookingPolicy).
+ */
 @Controller('v1/storefronts')
 @UseGuards(JwtAuthGuard)
 export class StorefrontController {
@@ -31,9 +37,11 @@ export class StorefrontController {
   ) {}
 
   /**
-   * Opening a storefront is admin-only for now — not provider
-   * self-service. The platform wants to control who's allowed to sell
-   * before opening that up; see README.
+   * Admin-only, and there's only ever one: creates the platform's single
+   * store if it doesn't exist yet (idempotent — see
+   * CommerceProcessManager.openStorefront()), or just returns the
+   * existing one. Not provider self-service, and not "open a storefront
+   * for provider X" anymore either — see Storefront's comment.
    */
   @Post()
   async open(
@@ -42,12 +50,12 @@ export class StorefrontController {
   ) {
     if (!account.roles.includes('admin')) {
       throw new RoleRequiredError(
-        'Solo un administrador puede crear una tienda.',
+        'Solo un administrador puede crear la tienda.',
       );
     }
     const storefront = await this.processManager.openStorefront(
       {
-        providerId: dto.providerId,
+        providerId: account.accountId,
         name: dto.name,
         description: dto.description,
       },
@@ -56,8 +64,8 @@ export class StorefrontController {
     return { data: toStorefrontResponse(storefront) };
   }
 
-  /** The admin-curated catalog a provider picks products from — see
-   * AddProductCatalog migration. */
+  /** The admin-curated catalog the admin picks products from to stock
+   * the store — see AddProductCatalog migration. */
   @Get('catalog')
   async listCatalog() {
     const rows = await this.catalogItems.find({
@@ -68,10 +76,9 @@ export class StorefrontController {
   }
 
   /**
-   * Browse every open storefront on the platform — this MVP has no real
-   * Marketplace/discovery Bounded Context (see README), so this is how an
-   * owner finds a walker's shop rather than through the (mock) walker
-   * cards on Home.
+   * Lists the store (0 or 1 rows now that there's only one — see
+   * Storefront's comment; kept as a list since the owner-facing app
+   * screens already handle that shape without a rewrite).
    */
   @Get()
   async listActive() {
@@ -98,13 +105,18 @@ export class StorefrontController {
     };
   }
 
-  /** null means this provider hasn't opened a storefront yet — a normal
-   * state, not an error (POST here to open one). */
+  /**
+   * Admin's own view of the one platform store — not "this account's
+   * storefront" (there's only one, and it isn't owned by any particular
+   * account; see Storefront's comment). null means nobody's created it
+   * yet (a normal state, not an error — POST here to open it).
+   */
   @Get('me')
   async getMine(@CurrentAccount() account: AuthenticatedAccount) {
-    const storefront = await this.storefronts.findOne({
-      where: { providerId: account.accountId },
-    });
+    if (!account.roles.includes('admin')) {
+      throw new RoleRequiredError('Solo un administrador puede ver esto.');
+    }
+    const [storefront] = await this.storefronts.find({ take: 1 });
     if (!storefront) return { data: null };
 
     const products = await this.products.find({
@@ -124,7 +136,7 @@ export class StorefrontController {
       where: { providerId },
     });
     if (!storefront) {
-      throw new ResourceNotFoundError('Este paseador no tiene una tienda abierta.');
+      throw new ResourceNotFoundError('Todavía no se ha creado la tienda.');
     }
     const products = await this.products.find({
       where: { storefrontId: storefront.id, isActive: true },
@@ -137,18 +149,22 @@ export class StorefrontController {
     };
   }
 
-  /** Lists a Product from the admin-curated catalog (see AddProductDto) —
-   * name/description/category come from the CatalogItem, not the caller. */
+  /**
+   * Admin-only — adds a Product to the one platform store from the
+   * admin-curated catalog (see AddProductDto). name/description/category
+   * come from the CatalogItem, not the caller.
+   */
   @Post('me/products')
   async addProduct(
     @Body() dto: AddProductDto,
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
-    const storefront = await this.storefronts.findOne({
-      where: { providerId: account.accountId },
-    });
+    if (!account.roles.includes('admin')) {
+      throw new RoleRequiredError('Solo un administrador puede agregar productos.');
+    }
+    const [storefront] = await this.storefronts.find({ take: 1 });
     if (!storefront) {
-      throw new ResourceNotFoundError('Todavía no has abierto tu tienda.');
+      throw new ResourceNotFoundError('Todavía no se ha creado la tienda.');
     }
     const catalogItem = await this.catalogItems.findOne({
       where: { id: dto.catalogItemId, isActive: true },

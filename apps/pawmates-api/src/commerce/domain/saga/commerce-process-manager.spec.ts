@@ -22,7 +22,7 @@ import { CommerceProcessManager } from './commerce-process-manager';
 describe('CommerceProcessManager', () => {
   let manager: CommerceProcessManager;
   let storefronts: jest.Mocked<
-    Pick<Repository<Storefront>, 'findOne' | 'save'>
+    Pick<Repository<Storefront>, 'find' | 'findOne' | 'save'>
   >;
   let products: jest.Mocked<
     Pick<Repository<Product>, 'find' | 'findOne' | 'save'>
@@ -40,7 +40,7 @@ describe('CommerceProcessManager', () => {
   let dataSource: DataSource;
 
   beforeEach(() => {
-    storefronts = { findOne: jest.fn(), save: jest.fn() };
+    storefronts = { find: jest.fn(), findOne: jest.fn(), save: jest.fn() };
     products = { find: jest.fn(), findOne: jest.fn(), save: jest.fn() };
     orders = { findOne: jest.fn(), find: jest.fn(), save: jest.fn() };
     trustSafety = {
@@ -94,7 +94,7 @@ describe('CommerceProcessManager', () => {
 
   describe('openStorefront', () => {
     it('checks verification then persists + enqueues StorefrontOpened', async () => {
-      storefronts.findOne.mockResolvedValue(null);
+      storefronts.find.mockResolvedValue([]);
 
       const storefront = await manager.openStorefront(
         { providerId: 'provider-1', name: 'La tiendita' },
@@ -116,12 +116,12 @@ describe('CommerceProcessManager', () => {
       );
     });
 
-    it('is idempotent: one storefront per provider', async () => {
+    it('is idempotent: only one storefront ever exists, platform-wide', async () => {
       const existing = makeStorefront();
-      storefronts.findOne.mockResolvedValue(existing);
+      storefronts.find.mockResolvedValue([existing]);
 
       const result = await manager.openStorefront(
-        { providerId: 'provider-1', name: 'La tiendita' },
+        { providerId: 'someone-else-entirely', name: 'La tiendita' },
         'trace-1',
       );
 
@@ -131,7 +131,7 @@ describe('CommerceProcessManager', () => {
     });
 
     it('refuses to open a storefront without a valid verification', async () => {
-      storefronts.findOne.mockResolvedValue(null);
+      storefronts.find.mockResolvedValue([]);
       trustSafety.checkVerificationValid.mockResolvedValue({
         valid: false,
         expiresAt: new Date(),
@@ -147,13 +147,17 @@ describe('CommerceProcessManager', () => {
   });
 
   describe('addProduct', () => {
-    it('lists a product when the requester owns the storefront', async () => {
+    it('lists a product on the (one) storefront', async () => {
       const storefront = makeStorefront();
       storefronts.findOne.mockResolvedValue(storefront);
 
+      // requestedBy isn't checked here anymore — ProductController's
+      // admin-role guard is the actual authorization gate now (there's no
+      // per-storefront ownership left to check against — see
+      // Storefront's comment).
       const product = await manager.addProduct({
         storefrontId: storefront.id,
-        requestedBy: 'provider-1',
+        requestedBy: 'some-admin',
         name: 'Premios de pollo',
         priceAmount: 800,
         priceCurrency: 'USD',
@@ -162,23 +166,6 @@ describe('CommerceProcessManager', () => {
 
       expect(product.name).toBe('Premios de pollo');
       expect(products.save).toHaveBeenCalledWith(product);
-    });
-
-    it('refuses when the requester does not own the storefront', async () => {
-      const storefront = makeStorefront();
-      storefronts.findOne.mockResolvedValue(storefront);
-
-      await expect(
-        manager.addProduct({
-          storefrontId: storefront.id,
-          requestedBy: 'someone-else',
-          name: 'Premios de pollo',
-          priceAmount: 800,
-          priceCurrency: 'USD',
-          category: 'treat',
-        }),
-      ).rejects.toThrow(ValidationError);
-      expect(products.save).not.toHaveBeenCalled();
     });
   });
 
@@ -226,7 +213,6 @@ describe('CommerceProcessManager', () => {
       const existing = Order.place({
         ownerId: 'owner-1',
         storefrontId: 'storefront-1',
-        providerId: 'provider-1',
         idempotencyKey: 'idem-1',
         lines: [],
         total: Money.zero('USD'),
@@ -241,14 +227,16 @@ describe('CommerceProcessManager', () => {
 
     it('attaches a delivery booking when one is already confirmed', async () => {
       setupHappyPath();
-      requiresUpcomingBooking.findDeliveryBooking.mockResolvedValue(
-        'booking-1',
-      );
+      requiresUpcomingBooking.findDeliveryBooking.mockResolvedValue({
+        bookingId: 'booking-1',
+        providerId: 'provider-1',
+      });
 
       const order = await manager.placeOrder(cmd, 'trace-1');
 
       expect(order.status).toBe(OrderStatus.AwaitingDelivery);
       expect(order.deliveryBookingId).toBe('booking-1');
+      expect(order.providerId).toBe('provider-1');
       expect(txManagerSave).toHaveBeenCalledWith(
         OutboxEvent,
         expect.objectContaining({ eventType: 'OrderAwaitingDelivery' }),
@@ -297,30 +285,30 @@ describe('CommerceProcessManager', () => {
       const order = Order.place({
         ownerId: 'owner-1',
         storefrontId: 'storefront-1',
-        providerId: 'provider-1',
         idempotencyKey: 'idem-1',
         lines: [],
         total: Money.zero('USD'),
       });
       order.markPaid();
       orders.findOne.mockResolvedValue(order);
-      requiresUpcomingBooking.assertDeliveryBooking.mockResolvedValue(
-        'booking-1',
-      );
+      requiresUpcomingBooking.assertDeliveryBooking.mockResolvedValue({
+        bookingId: 'booking-1',
+        providerId: 'provider-1',
+      });
 
       const result = await manager.attachDeliveryBooking(order.id, 'trace-1');
 
       expect(result.status).toBe(OrderStatus.AwaitingDelivery);
+      expect(result.providerId).toBe('provider-1');
       expect(
         requiresUpcomingBooking.assertDeliveryBooking,
-      ).toHaveBeenCalledWith('owner-1', 'provider-1');
+      ).toHaveBeenCalledWith('owner-1');
     });
 
     it('propagates NoUpcomingBookingError when none exists yet', async () => {
       const order = Order.place({
         ownerId: 'owner-1',
         storefrontId: 'storefront-1',
-        providerId: 'provider-1',
         idempotencyKey: 'idem-1',
         lines: [],
         total: Money.zero('USD'),
@@ -342,13 +330,12 @@ describe('CommerceProcessManager', () => {
       const order = Order.place({
         ownerId: 'owner-1',
         storefrontId: 'storefront-1',
-        providerId: 'provider-1',
         idempotencyKey: 'idem-1',
         lines: [],
         total: Money.zero('USD'),
       });
       order.markPaid();
-      order.attachDeliveryBooking('booking-1');
+      order.attachDeliveryBooking('booking-1', 'provider-1');
       order.openDeliveryWindow();
       orders.findOne.mockResolvedValue(order);
 
@@ -369,13 +356,12 @@ describe('CommerceProcessManager', () => {
       const order = Order.place({
         ownerId: 'owner-1',
         storefrontId: 'storefront-1',
-        providerId: 'provider-1',
         idempotencyKey: 'idem-1',
         lines: [],
         total: Money.zero('USD'),
       });
       order.markPaid();
-      order.attachDeliveryBooking('booking-1');
+      order.attachDeliveryBooking('booking-1', 'provider-1');
       orders.findOne.mockResolvedValue(order);
 
       await expect(
@@ -387,11 +373,11 @@ describe('CommerceProcessManager', () => {
       const order = Order.place({
         ownerId: 'owner-1',
         storefrontId: 'storefront-1',
-        providerId: 'provider-1',
         idempotencyKey: 'idem-1',
         lines: [],
         total: Money.zero('USD'),
       });
+      order.providerId = 'provider-1'; // set directly — still PendingPayment, no valid transition to go through here
       orders.findOne.mockResolvedValue(order);
 
       await expect(
@@ -415,7 +401,6 @@ describe('CommerceProcessManager', () => {
       const order = Order.place({
         ownerId: 'owner-1',
         storefrontId: 'storefront-1',
-        providerId: 'provider-1',
         idempotencyKey: 'idem-1',
         lines: [line],
         total: Money.of(1600, 'USD'),
@@ -442,12 +427,12 @@ describe('CommerceProcessManager', () => {
       const order = Order.place({
         ownerId: 'owner-1',
         storefrontId: 'storefront-1',
-        providerId: 'provider-1',
         idempotencyKey: 'idem-1',
         lines: [],
         total: Money.zero('USD'),
       });
       order.markPaid();
+      order.providerId = 'provider-1';
       orders.findOne.mockResolvedValue(order);
 
       await expect(
@@ -459,13 +444,12 @@ describe('CommerceProcessManager', () => {
       const order = Order.place({
         ownerId: 'owner-1',
         storefrontId: 'storefront-1',
-        providerId: 'provider-1',
         idempotencyKey: 'idem-1',
         lines: [],
         total: Money.zero('USD'),
       });
       order.markPaid();
-      order.attachDeliveryBooking('booking-1');
+      order.attachDeliveryBooking('booking-1', 'provider-1');
       order.openDeliveryWindow();
       order.confirmDelivered();
       orders.findOne.mockResolvedValue(order);

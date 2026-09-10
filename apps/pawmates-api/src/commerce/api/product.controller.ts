@@ -1,4 +1,4 @@
-import { CurrentAccount, JwtAuthGuard } from '@pawmates/common';
+import { CurrentAccount, JwtAuthGuard, RoleRequiredError } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import {
   Body,
@@ -12,6 +12,13 @@ import { CommerceProcessManager } from '../domain/saga/commerce-process-manager'
 import { UpdateProductDto } from './dto/update-product.dto';
 import { toProductResponse } from './storefront.controller';
 
+/**
+ * Admin-only, like the rest of managing the one platform store (see
+ * StorefrontController) — CommerceProcessManager.updateProduct() used to
+ * enforce this itself (a product's owning storefront had to match the
+ * caller), but that stopped meaning anything once there was only one
+ * store nobody in particular owns, so the check moved up here instead.
+ */
 @Controller('v1/products')
 @UseGuards(JwtAuthGuard)
 export class ProductController {
@@ -23,6 +30,7 @@ export class ProductController {
     @Body() dto: UpdateProductDto,
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
+    this.assertAdmin(account);
     const product = await this.processManager.updateProduct(
       id,
       account.accountId,
@@ -37,11 +45,18 @@ export class ProductController {
     @Param('id') id: string,
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
+    this.assertAdmin(account);
     const product = await this.processManager.updateProduct(
       id,
       account.accountId,
       { isActive: false },
     );
     return { data: toProductResponse(product) };
+  }
+
+  private assertAdmin(account: AuthenticatedAccount): void {
+    if (!account.roles.includes('admin')) {
+      throw new RoleRequiredError('Solo un administrador puede editar productos.');
+    }
   }
 }

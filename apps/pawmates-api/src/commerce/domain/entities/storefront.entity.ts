@@ -2,13 +2,19 @@ import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 import { ulid } from 'ulid';
 
 /**
- * Storefront — aggregate root, one per provider (walker) who has opened
- * their own mini-shop (PawMates Commerce design: "tienda propia por
- * paseador", not a PawMates-curated catalog). Opening one requires a
- * valid trust-safety verification, checked by
- * CommerceProcessManager.openStorefront() before this is ever
- * constructed — this entity itself doesn't reach out to another Bounded
- * Context, same discipline as Booking.
+ * Storefront — aggregate root. One single platform-wide store (not one
+ * per paseador — that was this project's original design, replaced when
+ * the owner decided a single unified store with a shared catalog/
+ * inventory made more sense than each walker running their own shop);
+ * CommerceProcessManager.openStorefront() enforces that singleton by
+ * refusing to create a second row regardless of who asks.
+ *
+ * `providerId` is a holdover from the per-walker design — it's just
+ * whichever admin account created the store now, with no bearing on
+ * delivery eligibility. Delivery routes through whichever walker the
+ * owner's own next confirmed Booking happens to be with (see
+ * RequiresUpcomingBookingPolicy and Order.attachDeliveryBooking), not
+ * through this field.
  */
 @Entity({ name: 'commerce_storefronts' })
 export class Storefront {

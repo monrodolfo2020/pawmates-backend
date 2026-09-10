@@ -1,14 +1,13 @@
-import { IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 
 /**
- * POST /v1/storefronts — an admin opens a storefront on a provider's
- * behalf (see StorefrontController: this is admin-only for now, not
- * provider self-service).
+ * POST /v1/storefronts — admin-only (see StorefrontController), creates
+ * the one platform-wide store if it doesn't exist yet. No providerId:
+ * this isn't opened on any particular walker's behalf (see Storefront's
+ * comment) — whichever admin calls this just becomes the row's
+ * `provider_id` value, with no further meaning.
  */
 export class OpenStorefrontDto {
-  @IsUUID()
-  providerId!: string;
-
   @IsString()
   @MinLength(2)
   @MaxLength(80)

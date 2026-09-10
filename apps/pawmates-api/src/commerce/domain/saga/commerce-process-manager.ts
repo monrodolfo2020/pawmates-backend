@@ -54,10 +54,11 @@ export class CommerceProcessManager {
     cmd: OpenStorefrontCommand,
     traceId: string,
   ): Promise<Storefront> {
-    const existing = await this.storefronts.findOne({
-      where: { providerId: cmd.providerId },
-    });
-    if (existing) return existing; // one storefront per provider — idempotent by construction
+    // One store for the whole platform, full stop — not one per provider
+    // (see Storefront's comment) — so this checks for *any* existing row,
+    // regardless of who's asking, and is idempotent by construction.
+    const [existing] = await this.storefronts.find({ take: 1 });
+    if (existing) return existing;
 
     const verification = await this.trustSafety.checkVerificationValid({
       accountId: cmd.providerId,
@@ -81,13 +82,12 @@ export class CommerceProcessManager {
   }
 
   async addProduct(cmd: AddProductCommand): Promise<Product> {
-    const storefront = await this.loadStorefrontOrThrow(cmd.storefrontId);
-    if (storefront.providerId !== cmd.requestedBy) {
-      throw new ValidationError('Esta no es tu tienda.');
-    }
+    // No ownership check — there's one store, and StorefrontController
+    // already requires an admin caller before this is ever reached.
+    await this.loadStorefrontOrThrow(cmd.storefrontId);
 
     const product = Product.list({
-      storefrontId: storefront.id,
+      storefrontId: cmd.storefrontId,
       catalogItemId: cmd.catalogItemId,
       name: cmd.name,
       description: cmd.description,
@@ -99,6 +99,10 @@ export class CommerceProcessManager {
     return product;
   }
 
+  // requestedBy: unused by this method itself — ProductController's
+  // admin-role guard is the actual authorization check now (see its
+  // comment); kept as a param so callers still pass who's asking, in
+  // case that's ever useful for logging/auditing.
   async updateProduct(
     productId: string,
     requestedBy: string,
@@ -111,11 +115,8 @@ export class CommerceProcessManager {
       isActive?: boolean;
     },
   ): Promise<Product> {
+    void requestedBy;
     const product = await this.loadProductOrThrow(productId);
-    const storefront = await this.loadStorefrontOrThrow(product.storefrontId);
-    if (storefront.providerId !== requestedBy) {
-      throw new ValidationError('Este producto no es tuyo.');
-    }
 
     product.updateDetails({
       name: updates.name,
@@ -188,7 +189,6 @@ export class CommerceProcessManager {
     const order = Order.place({
       ownerId: cmd.ownerId,
       storefrontId: storefront.id,
-      providerId: storefront.providerId,
       idempotencyKey: cmd.idempotencyKey,
       lines: orderLines,
       total,
@@ -205,12 +205,10 @@ export class CommerceProcessManager {
     }
     order.markPaid();
 
-    const deliveryBookingId =
-      await this.requiresUpcomingBooking.findDeliveryBooking(
-        cmd.ownerId,
-        storefront.providerId,
-      );
-    if (deliveryBookingId) order.attachDeliveryBooking(deliveryBookingId);
+    const delivery = await this.requiresUpcomingBooking.findDeliveryBooking(
+      cmd.ownerId,
+    );
+    if (delivery) order.attachDeliveryBooking(delivery.bookingId, delivery.providerId);
 
     await this.dataSource.transaction(async (manager) => {
       await manager.save(Product, products); // persist each reserveStock() decrement
@@ -221,13 +219,13 @@ export class CommerceProcessManager {
         totalAmount: total.amount,
         totalCurrency: total.currency,
       });
-      if (deliveryBookingId) {
+      if (delivery) {
         await this.enqueue(
           manager,
           order.id,
           'OrderAwaitingDelivery',
           traceId,
-          { orderId: order.id, bookingId: deliveryBookingId },
+          { orderId: order.id, bookingId: delivery.bookingId },
         );
       }
     });
@@ -245,17 +243,16 @@ export class CommerceProcessManager {
       throw new ValidationError('Este pedido ya tiene entrega asignada.');
     }
 
-    const bookingId = await this.requiresUpcomingBooking.assertDeliveryBooking(
+    const delivery = await this.requiresUpcomingBooking.assertDeliveryBooking(
       order.ownerId,
-      order.providerId,
     );
-    order.attachDeliveryBooking(bookingId);
+    order.attachDeliveryBooking(delivery.bookingId, delivery.providerId);
 
     await this.dataSource.transaction(async (manager) => {
       await manager.save(Order, order);
       await this.enqueue(manager, order.id, 'OrderAwaitingDelivery', traceId, {
         orderId: order.id,
-        bookingId,
+        bookingId: delivery.bookingId,
       });
     });
     return order;
