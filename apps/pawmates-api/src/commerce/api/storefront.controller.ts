@@ -182,6 +182,7 @@ export class StorefrontController {
       priceCurrency: dto.priceCurrency ?? catalogItem.suggestedPriceCurrency,
       stockQuantity: dto.stockQuantity,
       category: catalogItem.category,
+      photos: dto.photos,
     });
     return { data: toProductResponse(product) };
   }
@@ -208,6 +209,7 @@ export function toProductResponse(product: Product) {
     stockQuantity: product.stockQuantity,
     category: product.category,
     isActive: product.isActive,
+    photos: product.photos,
   };
 }
 

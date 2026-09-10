@@ -1,4 +1,7 @@
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsIn,
   IsInt,
@@ -8,7 +11,9 @@ import {
   MinLength,
 } from 'class-validator';
 
-/** PATCH /v1/products/:id */
+/** PATCH /v1/products/:id — `photos`, if sent, replaces the whole
+ * gallery and must be 3-6 images (see Product.photos). Omit it to leave
+ * the existing photos untouched. */
 export class UpdateProductDto {
   @IsString()
   @MinLength(2)
@@ -37,4 +42,11 @@ export class UpdateProductDto {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @IsArray()
+  @ArrayMinSize(3)
+  @ArrayMaxSize(6)
+  @IsString({ each: true })
+  @IsOptional()
+  photos?: string[]; // base64 data URLs
 }

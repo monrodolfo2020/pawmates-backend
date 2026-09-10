@@ -1,4 +1,4 @@
-import { InsufficientStockError, Money } from '@pawmates/common';
+import { InsufficientStockError, Money, ValidationError } from '@pawmates/common';
 import {
   Column,
   CreateDateColumn,
@@ -12,6 +12,22 @@ import { bigintTransformer } from './bigint.transformer';
 
 export type ProductCategory =
   'treat' | 'toy' | 'accessory' | 'service_addon' | 'other';
+
+// Every product needs a real photo gallery, not one hero shot — but a
+// product listed before this shipped (the initial 100-item catalog seed)
+// has none yet, so `photos: []` stays valid as a legacy/transitional
+// state. Only a *nonzero* count is held to the 3-6 range.
+const MIN_PHOTOS = 3;
+const MAX_PHOTOS = 6;
+
+function assertPhotosValid(photos: string[]): void {
+  if (photos.length === 0) return;
+  if (photos.length < MIN_PHOTOS || photos.length > MAX_PHOTOS) {
+    throw new ValidationError(
+      `Un producto necesita entre ${MIN_PHOTOS} y ${MAX_PHOTOS} fotos.`,
+    );
+  }
+}
 
 /**
  * Product — its own aggregate root rather than nested inside Storefront
@@ -62,6 +78,12 @@ export class Product {
   @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive!: boolean;
 
+  // Base64 data URLs, same tradeoff as every other photo field in this
+  // app (see README's Identity section) — stored as a JSON array via
+  // TypeORM's simple-json, same convention as Pet.temperament.
+  @Column({ name: 'photos_base64', type: 'simple-json', default: '[]' })
+  photos!: string[];
+
   @VersionColumn()
   version!: number;
 
@@ -83,7 +105,10 @@ export class Product {
     price: Money;
     stockQuantity?: number | null;
     category: ProductCategory;
+    photos?: string[];
   }): Product {
+    const photos = params.photos ?? [];
+    assertPhotosValid(photos);
     const product = new Product();
     product.id = ulid().toLowerCase();
     product.storefrontId = params.storefrontId;
@@ -95,6 +120,7 @@ export class Product {
     product.stockQuantity = params.stockQuantity ?? null;
     product.category = params.category;
     product.isActive = true;
+    product.photos = photos;
     return product;
   }
 
@@ -104,6 +130,7 @@ export class Product {
     price?: Money;
     stockQuantity?: number | null;
     isActive?: boolean;
+    photos?: string[];
   }): void {
     if (params.name !== undefined) this.name = params.name;
     if (params.description !== undefined) this.description = params.description;
@@ -114,6 +141,10 @@ export class Product {
     if (params.stockQuantity !== undefined)
       this.stockQuantity = params.stockQuantity;
     if (params.isActive !== undefined) this.isActive = params.isActive;
+    if (params.photos !== undefined) {
+      assertPhotosValid(params.photos);
+      this.photos = params.photos;
+    }
   }
 
   /** Unlimited stock (`null`) never blocks a purchase. */

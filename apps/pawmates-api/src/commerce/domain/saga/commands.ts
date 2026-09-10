@@ -18,6 +18,7 @@ export interface AddProductCommand {
   priceCurrency: string;
   stockQuantity?: number | null;
   category: ProductCategory;
+  photos: string[];
 }
 
 export interface PlaceOrderLineCommand {

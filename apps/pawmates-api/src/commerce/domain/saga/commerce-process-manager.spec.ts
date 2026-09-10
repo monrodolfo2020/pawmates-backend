@@ -162,10 +162,29 @@ describe('CommerceProcessManager', () => {
         priceAmount: 800,
         priceCurrency: 'USD',
         category: 'treat',
+        photos: ['photo-1', 'photo-2', 'photo-3'],
       });
 
       expect(product.name).toBe('Premios de pollo');
+      expect(product.photos).toEqual(['photo-1', 'photo-2', 'photo-3']);
       expect(products.save).toHaveBeenCalledWith(product);
+    });
+
+    it('rejects a photo count outside 3-6', async () => {
+      const storefront = makeStorefront();
+      storefronts.findOne.mockResolvedValue(storefront);
+
+      await expect(
+        manager.addProduct({
+          storefrontId: storefront.id,
+          requestedBy: 'some-admin',
+          name: 'Premios de pollo',
+          priceAmount: 800,
+          priceCurrency: 'USD',
+          category: 'treat',
+          photos: ['photo-1', 'photo-2'],
+        }),
+      ).rejects.toThrow(ValidationError);
     });
   });
 

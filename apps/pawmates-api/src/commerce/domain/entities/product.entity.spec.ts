@@ -1,4 +1,4 @@
-import { InsufficientStockError, Money } from '@pawmates/common';
+import { InsufficientStockError, Money, ValidationError } from '@pawmates/common';
 import { Product } from './product.entity';
 
 function makeProduct(stockQuantity: number | null): Product {
@@ -48,5 +48,48 @@ describe('Product aggregate', () => {
     product.updateDetails({ price: Money.of(2000, 'USD') });
     expect(product.price.equals(Money.of(2000, 'USD'))).toBe(true);
     expect(product.name).toBe('Correa reflectante');
+  });
+
+  it('defaults to an empty photo gallery (legacy/transitional state)', () => {
+    const product = makeProduct(5);
+    expect(product.photos).toEqual([]);
+  });
+
+  it('accepts a 3-6 photo gallery on list()', () => {
+    const product = Product.list({
+      storefrontId: 'storefront-1',
+      name: 'Correa reflectante',
+      price: Money.of(1500, 'USD'),
+      stockQuantity: 5,
+      category: 'accessory',
+      photos: ['a', 'b', 'c'],
+    });
+    expect(product.photos).toEqual(['a', 'b', 'c']);
+  });
+
+  it('rejects a photo count outside 3-6 on list()', () => {
+    expect(() =>
+      Product.list({
+        storefrontId: 'storefront-1',
+        name: 'Correa reflectante',
+        price: Money.of(1500, 'USD'),
+        stockQuantity: 5,
+        category: 'accessory',
+        photos: ['a', 'b'],
+      }),
+    ).toThrow(ValidationError);
+  });
+
+  it('rejects a photo count outside 3-6 on updateDetails()', () => {
+    const product = makeProduct(5);
+    expect(() =>
+      product.updateDetails({ photos: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }),
+    ).toThrow(ValidationError);
+  });
+
+  it('updateDetails replaces the photo gallery when given a valid count', () => {
+    const product = makeProduct(5);
+    product.updateDetails({ photos: ['a', 'b', 'c'] });
+    expect(product.photos).toEqual(['a', 'b', 'c']);
   });
 });

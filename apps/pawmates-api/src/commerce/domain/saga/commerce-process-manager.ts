@@ -94,6 +94,7 @@ export class CommerceProcessManager {
       price: Money.of(cmd.priceAmount, cmd.priceCurrency),
       stockQuantity: cmd.stockQuantity,
       category: cmd.category,
+      photos: cmd.photos,
     });
     await this.products.save(product);
     return product;
@@ -113,6 +114,7 @@ export class CommerceProcessManager {
       priceCurrency?: string;
       stockQuantity?: number | null;
       isActive?: boolean;
+      photos?: string[];
     },
   ): Promise<Product> {
     void requestedBy;
@@ -130,6 +132,7 @@ export class CommerceProcessManager {
           : undefined,
       stockQuantity: updates.stockQuantity,
       isActive: updates.isActive,
+      photos: updates.photos,
     });
     await this.products.save(product);
     return product;
