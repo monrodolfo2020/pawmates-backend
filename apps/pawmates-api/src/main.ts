@@ -2,6 +2,7 @@ import { DomainExceptionFilter } from '@pawmates/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { json, urlencoded } from 'express';
+import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -14,7 +15,10 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true, limit: '15mb' }));
   app.enableCors(); // demo frontend calls this from a browser (Expo web) — no cookies/credentials involved
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.useGlobalFilters(new DomainExceptionFilter());
+  // Passing the DataSource lets the filter self-heal a stale Turso/Hrana
+  // stream (see its own comment) instead of leaving every request on this
+  // warm instance broken until Vercel cycles to a fresh one.
+  app.useGlobalFilters(new DomainExceptionFilter(app.get(DataSource)));
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
 
