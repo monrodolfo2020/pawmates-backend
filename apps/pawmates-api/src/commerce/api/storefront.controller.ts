@@ -4,6 +4,7 @@ import {
   ResourceNotFoundError,
   RoleRequiredError,
   ValidationError,
+  uploadBase64Photos,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
@@ -182,7 +183,7 @@ export class StorefrontController {
       priceCurrency: dto.priceCurrency ?? catalogItem.suggestedPriceCurrency,
       stockQuantity: dto.stockQuantity,
       category: catalogItem.category,
-      photos: dto.photos,
+      photos: await uploadBase64Photos(dto.photos, 'products'),
     });
     return { data: toProductResponse(product) };
   }

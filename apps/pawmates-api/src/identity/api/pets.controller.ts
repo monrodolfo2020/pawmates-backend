@@ -3,6 +3,8 @@ import {
   JwtAuthGuard,
   ResourceNotFoundError,
   ValidationError,
+  isDataUrl,
+  uploadBase64Photo,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import {
@@ -36,7 +38,11 @@ export class PetsController {
     pet.size = dto.size;
     pet.temperament = dto.temperament;
     pet.vaccines = dto.vaccines;
-    pet.photoBase64 = dto.photo ?? null;
+    pet.photoBase64 = dto.photo
+      ? isDataUrl(dto.photo)
+        ? await uploadBase64Photo(dto.photo, 'pets')
+        : dto.photo
+      : null;
     await this.pets.save(pet);
     return { data: toPetResponse(pet) };
   }
@@ -66,7 +72,12 @@ export class PetsController {
     if (dto.size !== undefined) pet.size = dto.size;
     if (dto.temperament !== undefined) pet.temperament = dto.temperament;
     if (dto.vaccines !== undefined) pet.vaccines = dto.vaccines;
-    if (dto.photo !== undefined) pet.photoBase64 = dto.photo;
+    if (dto.photo !== undefined) {
+      pet.photoBase64 =
+        dto.photo && isDataUrl(dto.photo)
+          ? await uploadBase64Photo(dto.photo, 'pets')
+          : dto.photo;
+    }
     await this.pets.save(pet);
     return { data: toPetResponse(pet) };
   }

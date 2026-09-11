@@ -42,8 +42,16 @@ should all be green).
 3. Also add `JWT_SECRET` (any long random string, e.g.
    `openssl rand -hex 32` — Vercel has no Render-style auto-generation for
    this).
-4. Deploy. Watch the build log for the migration output.
-5. Point your frontend's API base URL at the Vercel deployment's URL
+4. Also add `BLOB_READ_WRITE_TOKEN` — the same Vercel project, **Storage**
+   tab → **Create Database** → **Blob** → once created, its token is
+   already wired into that project's env vars automatically (no manual
+   copy-paste needed, unlike Turso's). Every photo upload (Pet,
+   ProviderVerification, WalkEvent, CatalogItem, Product — see README's
+   Architecture Decisions) needs this; without it, any request carrying a
+   photo fails with a clear "no configurado" error instead of falling back
+   to storing the photo inline again.
+5. Deploy. Watch the build log for the migration output.
+6. Point your frontend's API base URL at the Vercel deployment's URL
    (`/health`, `/v1/...` — same paths regardless of platform).
 
 Cold starts here work a little differently than a traditional server's:
@@ -142,9 +150,13 @@ the live deployment — the `pawmates-api` Render web service itself.
   comparable cold-start behavior for the same reason (see above) — fine
   for a demo, not for anything latency-sensitive, on either platform.
 - Turso's free tier has its own storage/row-read limits — check your
-  Turso dashboard if usage grows; this project's data volume (a handful
-  of tables, no media beyond base64 photos) is small enough to comfortably
-  fit it for a demo.
+  Turso dashboard if usage grows; photos now go to Vercel Blob instead of
+  inline database columns (see README's Architecture Decisions), which
+  keeps this project's actual database volume small regardless of how
+  many photos get uploaded.
+- Vercel Blob's own free tier has its own storage/bandwidth limits —
+  check the Storage tab's usage if it grows; a demo's worth of product/pet/
+  verification photos is nowhere near it.
 
 ## What's intentionally out of scope here
 
@@ -156,10 +168,13 @@ the live deployment — the `pawmates-api` Render web service itself.
   begin with).
 - **No message broker.** The domain-event-log tables (`*_outbox_events`)
   are written but nothing drains them — see README.
-- **Provider verification and pet photos live in the database as base64**,
-  not object storage — see README's Identity section for the tradeoff
-  that accepts. Anyone with the Turso auth token can read every uploaded
-  ID document; fine for a demo with test accounts, not for anything real.
+- **Vercel Blob's default access is `public`** — anyone with a photo's URL
+  can view it (URLs aren't guessable, but they aren't access-controlled
+  either). Fine for product/catalog photos, which are meant to be public
+  anyway; the same setting is used for ID verification documents too (see
+  README's Architecture Decisions) purely to keep this MVP's upload code
+  uniform — not something a real deployment handling real ID documents
+  should copy as-is.
 - **JWT_SECRET**: Render generates one for you (`generateValue: true`,
   a real random value, set once at creation and never in the repo or in
   chat). Vercel doesn't have that feature — you pick the value yourself

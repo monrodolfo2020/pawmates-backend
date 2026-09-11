@@ -169,12 +169,23 @@ apps/pawmates-api/src/
   needs to match that convention too.
 - **Money**: integer minor-currency-unit amounts (`Money` value object) —
   never floats.
-- **Provider verification photos are base64 text columns**
-  (`ProviderVerification.facePhotoBase64` / `idDocumentPhotoBase64`, same
-  for `Pet.photoBase64`), not object storage — a deliberate MVP tradeoff
-  (see DEPLOY.md's Cost section) to avoid a second paid service. Sensitive
-  data sitting in the same database as everything else; treat this as a
-  demo posture, not a template for handling real ID documents.
+- **Photos are uploaded to Vercel Blob, not stored inline.** Every
+  photo-accepting field (`Pet.photoBase64`, `ProviderVerification`'s
+  `facePhotoBase64`/`idDocumentPhotoBase64`, `WalkEvent.photoBase64`,
+  `CatalogItem.photoBase64`, `Product.photos`) still arrives from the
+  client as base64 (see `resizeImagePhoto.ts` on the frontend), but the
+  API uploads it via `uploadBase64Photo`/`uploadBase64Photos`
+  (`libs/common/src/storage/blob-storage.ts`) before persisting, storing
+  only the resulting URL. Requires `BLOB_READ_WRITE_TOKEN` (Vercel
+  dashboard → the project → Storage → create a Blob store → copy its
+  token into env vars); missing it fails the request loudly rather than
+  falling back to inline storage. Column names still say `*Base64` —
+  that predates this change and would need a rename migration across 5
+  tables to fix, not worth it for a name alone. Rows written before this
+  shipped may still hold real inline base64 in the same column; both are
+  valid `<Image source={{uri}}>` values on the frontend, so nothing
+  there needed to change — those rows are just heavier until whatever
+  wrote them is edited again.
 
 ## Database
 

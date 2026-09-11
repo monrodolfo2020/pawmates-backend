@@ -1,4 +1,4 @@
-import { CurrentAccount, JwtAuthGuard, RoleRequiredError } from '@pawmates/common';
+import { CurrentAccount, JwtAuthGuard, RoleRequiredError, uploadBase64Photos } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import {
   Body,
@@ -31,11 +31,10 @@ export class ProductController {
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
     this.assertAdmin(account);
-    const product = await this.processManager.updateProduct(
-      id,
-      account.accountId,
-      dto,
-    );
+    const product = await this.processManager.updateProduct(id, account.accountId, {
+      ...dto,
+      photos: dto.photos ? await uploadBase64Photos(dto.photos, 'products') : undefined,
+    });
     return { data: toProductResponse(product) };
   }
 

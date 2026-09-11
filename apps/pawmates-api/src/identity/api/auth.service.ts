@@ -1,6 +1,7 @@
 import {
   EmailAlreadyRegisteredError,
   InvalidCredentialsError,
+  uploadBase64Photo,
 } from '@pawmates/common';
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -109,8 +110,8 @@ export class AuthService {
     if (existing) return; // already on file — don't overwrite a pending/verified record here
     const verification = new ProviderVerification();
     verification.accountId = accountId;
-    verification.facePhotoBase64 = facePhoto;
-    verification.idDocumentPhotoBase64 = idDocumentPhoto;
+    verification.facePhotoBase64 = await uploadBase64Photo(facePhoto, 'verifications');
+    verification.idDocumentPhotoBase64 = await uploadBase64Photo(idDocumentPhoto, 'verifications');
     verification.status = 'pending';
     await this.verifications.save(verification);
   }

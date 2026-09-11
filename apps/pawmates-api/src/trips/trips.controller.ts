@@ -1,4 +1,10 @@
-import { CurrentAccount, JwtAuthGuard, RoleRequiredError, ValidationError } from '@pawmates/common';
+import {
+  CurrentAccount,
+  JwtAuthGuard,
+  RoleRequiredError,
+  ValidationError,
+  uploadBase64Photo,
+} from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import {
   Body,
@@ -107,7 +113,9 @@ export class TripsController {
     const event = WalkEvent.log({
       bookingId,
       type: dto.type,
-      photoBase64: dto.photoBase64,
+      photoBase64: dto.photoBase64
+        ? await uploadBase64Photo(dto.photoBase64, 'walk-events')
+        : dto.photoBase64,
       note: dto.note,
       lat: dto.lat,
       lng: dto.lng,

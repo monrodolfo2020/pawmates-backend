@@ -24,6 +24,7 @@
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/typeorm": "^11.0.0",
+    "@vercel/blob": "^2.8.0",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "npm:libsql@^0.5.29",
     "class-transformer": "^0.5.1",

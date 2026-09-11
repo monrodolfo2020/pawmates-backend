@@ -9,6 +9,14 @@ import { AuthService } from './auth.service';
 import { Account } from '../domain/entities/account.entity';
 import { ProviderVerification } from '../domain/entities/provider-verification.entity';
 
+// Real uploads need a network call + BLOB_READ_WRITE_TOKEN — this only
+// verifies AuthService hands the right value to it, not the upload itself
+// (see blob-storage.ts's own tests, if any, for that).
+jest.mock('@pawmates/common', () => ({
+  ...jest.requireActual('@pawmates/common'),
+  uploadBase64Photo: jest.fn((dataUrl: string) => Promise.resolve(`https://blob.test/${dataUrl}`)),
+}));
+
 describe('AuthService', () => {
   let service: AuthService;
   let accounts: jest.Mocked<
@@ -96,8 +104,8 @@ describe('AuthService', () => {
 
       expect(verifications.save).toHaveBeenCalledWith(
         expect.objectContaining({
-          facePhotoBase64: 'face-b64',
-          idDocumentPhotoBase64: 'id-b64',
+          facePhotoBase64: 'https://blob.test/face-b64',
+          idDocumentPhotoBase64: 'https://blob.test/id-b64',
           status: 'pending',
         }),
       );

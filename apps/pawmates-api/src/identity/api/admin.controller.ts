@@ -3,6 +3,8 @@ import {
   JwtAuthGuard,
   ResourceNotFoundError,
   RoleRequiredError,
+  isDataUrl,
+  uploadBase64Photo,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
@@ -170,7 +172,12 @@ export class AdminController {
     if (dto.name !== undefined) item.name = dto.name;
     if (dto.description !== undefined) item.description = dto.description;
     if (dto.suggestedPriceAmount !== undefined) item.suggestedPriceAmount = dto.suggestedPriceAmount;
-    if (dto.photo !== undefined) item.photoBase64 = dto.photo;
+    if (dto.photo !== undefined) {
+      item.photoBase64 =
+        dto.photo && isDataUrl(dto.photo)
+          ? await uploadBase64Photo(dto.photo, 'catalog')
+          : dto.photo;
+    }
     if (dto.isActive !== undefined) item.isActive = dto.isActive;
     await this.catalogItems.save(item);
 
