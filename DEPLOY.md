@@ -42,14 +42,15 @@ should all be green).
 3. Also add `JWT_SECRET` (any long random string, e.g.
    `openssl rand -hex 32` — Vercel has no Render-style auto-generation for
    this).
-4. Also add `BLOB_READ_WRITE_TOKEN` — the same Vercel project, **Storage**
-   tab → **Create Database** → **Blob** → once created, its token is
-   already wired into that project's env vars automatically (no manual
-   copy-paste needed, unlike Turso's). Every photo upload (Pet,
+4. Connect a Blob store — the same Vercel project, **Storage** tab →
+   **Create Database** → **Blob**, then **Connect Project** to this one if
+   it isn't already. No token to copy: the SDK authenticates via OIDC
+   (`BLOB_STORE_ID` + a `VERCEL_OIDC_TOKEN` Vercel injects and rotates
+   automatically once connected). Every photo upload (Pet,
    ProviderVerification, WalkEvent, CatalogItem, Product — see README's
-   Architecture Decisions) needs this; without it, any request carrying a
-   photo fails with a clear "no configurado" error instead of falling back
-   to storing the photo inline again.
+   Architecture Decisions) needs this; a store that's created but not
+   connected to *this* project, or connected before the *next* deploy after
+   connecting it, won't have working credentials yet.
 5. Deploy. Watch the build log for the migration output.
 6. Point your frontend's API base URL at the Vercel deployment's URL
    (`/health`, `/v1/...` — same paths regardless of platform).

@@ -176,10 +176,13 @@ apps/pawmates-api/src/
   client as base64 (see `resizeImagePhoto.ts` on the frontend), but the
   API uploads it via `uploadBase64Photo`/`uploadBase64Photos`
   (`libs/common/src/storage/blob-storage.ts`) before persisting, storing
-  only the resulting URL. Requires `BLOB_READ_WRITE_TOKEN` (Vercel
-  dashboard → the project → Storage → create a Blob store → copy its
-  token into env vars); missing it fails the request loudly rather than
-  falling back to inline storage. Column names still say `*Base64` —
+  only the resulting URL. Needs a Blob store connected to the Vercel
+  project (dashboard → Storage → create one → Connect Project) — no
+  token to copy by hand; `@vercel/blob`'s `put()` authenticates via OIDC
+  (`BLOB_STORE_ID` + the `VERCEL_OIDC_TOKEN` Vercel injects and rotates
+  automatically once connected), falling back to an explicit
+  `BLOB_READ_WRITE_TOKEN` env var only if one is set. Column names still
+  say `*Base64` —
   that predates this change and would need a rename migration across 5
   tables to fix, not worth it for a name alone. Rows written before this
   shipped may still hold real inline base64 in the same column; both are

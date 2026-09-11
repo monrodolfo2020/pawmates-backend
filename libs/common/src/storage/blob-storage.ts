@@ -16,11 +16,17 @@ const DATA_URL_PATTERN = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/;
  * source={{uri}}>` values on the frontend, so nothing there needed to
  * change; they're just heavier until whatever wrote them is edited again.
  *
- * Requires BLOB_READ_WRITE_TOKEN (Vercel dashboard → the project →
- * Storage tab → create a Blob store → copy its token into the project's
- * environment variables, then redeploy). Missing it throws rather than
- * silently falling back to inline base64 — better a loud failure than
- * quietly reintroducing the exact problem this exists to fix.
+ * Needs a Blob store connected to this Vercel project (dashboard →
+ * Storage → create one → Connect Project) — no manual token to copy.
+ * `put()` resolves credentials itself: an explicit `BLOB_READ_WRITE_TOKEN`
+ * env var if one's set (e.g. for local dev against a real store), or —
+ * what a normal Vercel deploy actually has — OIDC via `BLOB_STORE_ID` plus
+ * the `VERCEL_OIDC_TOKEN` Vercel injects and rotates automatically once
+ * the store is connected. Earlier versions of this function required
+ * `BLOB_READ_WRITE_TOKEN` specifically and refused to even try otherwise,
+ * which broke a project connected the OIDC way (no such token to find) —
+ * don't reintroduce that; let `put()` fail with its own message if
+ * credentials genuinely aren't resolvable.
  */
 export async function uploadBase64Photo(
   dataUrl: string,
@@ -32,19 +38,12 @@ export async function uploadBase64Photo(
       'Formato de imagen inválido (se esperaba un data URL base64).',
     );
   }
-  const token = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!token) {
-    throw new ValidationError(
-      'El almacenamiento de imágenes no está configurado (falta BLOB_READ_WRITE_TOKEN).',
-    );
-  }
   const [, mimeType, base64Data] = match;
   const extension = mimeType.split('/')[1] ?? 'jpg';
   const buffer = Buffer.from(base64Data, 'base64');
   const blob = await put(`${folder}/${ulid().toLowerCase()}.${extension}`, buffer, {
     access: 'public',
     contentType: mimeType,
-    token,
     addRandomSuffix: false,
   });
   return blob.url;
