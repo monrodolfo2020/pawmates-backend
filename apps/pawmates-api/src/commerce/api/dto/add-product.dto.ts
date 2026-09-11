@@ -28,7 +28,7 @@ export class AddProductDto {
   priceAmount?: number;
 
   @IsString()
-  @IsIn(['USD'])
+  @IsIn(['MXN'])
   @IsOptional()
   priceCurrency?: string;
 

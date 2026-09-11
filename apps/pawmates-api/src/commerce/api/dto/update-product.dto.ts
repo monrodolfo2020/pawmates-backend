@@ -30,7 +30,7 @@ export class UpdateProductDto {
   priceAmount?: number;
 
   @IsString()
-  @IsIn(['USD'])
+  @IsIn(['MXN'])
   @IsOptional()
   priceCurrency?: string;
 

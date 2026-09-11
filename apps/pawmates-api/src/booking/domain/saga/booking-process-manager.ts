@@ -223,7 +223,7 @@ export class BookingProcessManager {
     const record = booking.cancel(
       providerId,
       reason,
-      Money.zero(booking.priceBreakdown?.currency ?? 'USD'),
+      Money.zero(booking.priceBreakdown?.currency ?? 'MXN'),
     );
 
     await this.dataSource.transaction(async (manager) => {
@@ -262,7 +262,7 @@ export class BookingProcessManager {
             booking.priceBreakdown.currency,
           ),
         )
-      : Money.zero('USD');
+      : Money.zero('MXN');
 
     const record = booking.cancel(cancelledBy, reason, penalty);
 

@@ -29,9 +29,9 @@ export class FakeMarketplaceAdapter implements MarketplacePort {
     return Promise.resolve({
       available: true,
       providerId: params.providerServiceId,
-      rate: Money.of(5000, 'USD'),
-      commission: Money.of(750, 'USD'),
-      tax: Money.of(0, 'USD'),
+      rate: Money.of(85000, 'MXN'), // $850.00 MXN (was $50.00 USD, ~17 MXN/USD)
+      commission: Money.of(12750, 'MXN'), // $127.50 MXN (was $7.50 USD)
+      tax: Money.of(0, 'MXN'),
     });
   }
 }
