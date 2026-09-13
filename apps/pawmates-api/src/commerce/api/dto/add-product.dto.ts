@@ -14,7 +14,7 @@ import {
  * admin-curated catalog (see AddProductCatalog migration: no more
  * free-text name/description/category). Price and stock are theirs to
  * set; omit priceAmount to use the catalog's suggested price as-is.
- * `photos` is required (3-6 images) — every product added from here on
+ * `photos` is required (1-6 images) — every product added from here on
  * needs a real gallery; only pre-existing products may still have none
  * (see Product.photos).
  */
@@ -38,7 +38,7 @@ export class AddProductDto {
   stockQuantity?: number; // absent = unlimited (e.g. a service add-on)
 
   @IsArray()
-  @ArrayMinSize(3)
+  @ArrayMinSize(1)
   @ArrayMaxSize(6)
   @IsString({ each: true })
   photos!: string[]; // base64 data URLs

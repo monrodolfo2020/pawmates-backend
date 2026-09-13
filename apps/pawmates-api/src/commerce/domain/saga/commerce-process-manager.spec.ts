@@ -170,7 +170,7 @@ describe('CommerceProcessManager', () => {
       expect(products.save).toHaveBeenCalledWith(product);
     });
 
-    it('rejects a photo count outside 3-6', async () => {
+    it('rejects a photo count outside 1-6', async () => {
       const storefront = makeStorefront();
       storefronts.findOne.mockResolvedValue(storefront);
 
@@ -182,7 +182,7 @@ describe('CommerceProcessManager', () => {
           priceAmount: 800,
           priceCurrency: 'USD',
           category: 'treat',
-          photos: ['photo-1', 'photo-2'],
+          photos: ['photo-1', 'photo-2', 'photo-3', 'photo-4', 'photo-5', 'photo-6', 'photo-7'],
         }),
       ).rejects.toThrow(ValidationError);
     });

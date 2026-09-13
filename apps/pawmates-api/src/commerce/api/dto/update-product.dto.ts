@@ -12,7 +12,7 @@ import {
 } from 'class-validator';
 
 /** PATCH /v1/products/:id — `photos`, if sent, replaces the whole
- * gallery and must be 3-6 images (see Product.photos). Omit it to leave
+ * gallery and must be 1-6 images (see Product.photos). Omit it to leave
  * the existing photos untouched. */
 export class UpdateProductDto {
   @IsString()
@@ -44,7 +44,7 @@ export class UpdateProductDto {
   isActive?: boolean;
 
   @IsArray()
-  @ArrayMinSize(3)
+  @ArrayMinSize(1)
   @ArrayMaxSize(6)
   @IsString({ each: true })
   @IsOptional()

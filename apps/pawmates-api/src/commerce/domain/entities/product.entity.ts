@@ -13,11 +13,11 @@ import { bigintTransformer } from './bigint.transformer';
 export type ProductCategory =
   'treat' | 'toy' | 'accessory' | 'service_addon' | 'other';
 
-// Every product needs a real photo gallery, not one hero shot — but a
-// product listed before this shipped (the initial 100-item catalog seed)
-// has none yet, so `photos: []` stays valid as a legacy/transitional
-// state. Only a *nonzero* count is held to the 3-6 range.
-const MIN_PHOTOS = 3;
+// Every product needs at least one photo — but a product listed before
+// this shipped (the initial 100-item catalog seed) has none yet, so
+// `photos: []` stays valid as a legacy/transitional state. Only a
+// *nonzero* count is held to the 1-6 range.
+const MIN_PHOTOS = 1;
 const MAX_PHOTOS = 6;
 
 function assertPhotosValid(photos: string[]): void {

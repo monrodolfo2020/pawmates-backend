@@ -55,19 +55,19 @@ describe('Product aggregate', () => {
     expect(product.photos).toEqual([]);
   });
 
-  it('accepts a 3-6 photo gallery on list()', () => {
+  it('accepts a 1-6 photo gallery on list()', () => {
     const product = Product.list({
       storefrontId: 'storefront-1',
       name: 'Correa reflectante',
       price: Money.of(1500, 'USD'),
       stockQuantity: 5,
       category: 'accessory',
-      photos: ['a', 'b', 'c'],
+      photos: ['a'],
     });
-    expect(product.photos).toEqual(['a', 'b', 'c']);
+    expect(product.photos).toEqual(['a']);
   });
 
-  it('rejects a photo count outside 3-6 on list()', () => {
+  it('rejects a photo count outside 1-6 on list()', () => {
     expect(() =>
       Product.list({
         storefrontId: 'storefront-1',
@@ -75,12 +75,12 @@ describe('Product aggregate', () => {
         price: Money.of(1500, 'USD'),
         stockQuantity: 5,
         category: 'accessory',
-        photos: ['a', 'b'],
+        photos: ['a', 'b', 'c', 'd', 'e', 'f', 'g'],
       }),
     ).toThrow(ValidationError);
   });
 
-  it('rejects a photo count outside 3-6 on updateDetails()', () => {
+  it('rejects a photo count outside 1-6 on updateDetails()', () => {
     const product = makeProduct(5);
     expect(() =>
       product.updateDetails({ photos: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] }),
@@ -89,7 +89,7 @@ describe('Product aggregate', () => {
 
   it('updateDetails replaces the photo gallery when given a valid count', () => {
     const product = makeProduct(5);
-    product.updateDetails({ photos: ['a', 'b', 'c'] });
-    expect(product.photos).toEqual(['a', 'b', 'c']);
+    product.updateDetails({ photos: ['a'] });
+    expect(product.photos).toEqual(['a']);
   });
 });
