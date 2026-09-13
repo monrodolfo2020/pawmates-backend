@@ -26,7 +26,6 @@ import { OpenStorefrontDto } from './dto/open-storefront.dto';
  * owner (see RequiresUpcomingBookingPolicy).
  */
 @Controller('v1/storefronts')
-@UseGuards(JwtAuthGuard)
 export class StorefrontController {
   constructor(
     private readonly processManager: CommerceProcessManager,
@@ -45,6 +44,7 @@ export class StorefrontController {
    * for provider X" anymore either — see Storefront's comment.
    */
   @Post()
+  @UseGuards(JwtAuthGuard)
   async open(
     @Body() dto: OpenStorefrontDto,
     @CurrentAccount() account: AuthenticatedAccount,
@@ -66,8 +66,11 @@ export class StorefrontController {
   }
 
   /** The admin-curated catalog the admin picks products from to stock
-   * the store — see AddProductCatalog migration. */
+   * the store — see AddProductCatalog migration. Guarded (unlike the
+   * public store listing/detail below): it includes items the admin
+   * hasn't put in the store yet, so it isn't meant for shoppers. */
   @Get('catalog')
+  @UseGuards(JwtAuthGuard)
   async listCatalog() {
     const rows = await this.catalogItems.find({
       where: { isActive: true },
@@ -79,7 +82,8 @@ export class StorefrontController {
   /**
    * Lists the store (0 or 1 rows now that there's only one — see
    * Storefront's comment; kept as a list since the owner-facing app
-   * screens already handle that shape without a rewrite).
+   * screens already handle that shape without a rewrite). Public — a
+   * shopper can browse the catalog before creating an account.
    */
   @Get()
   async listActive() {
@@ -113,6 +117,7 @@ export class StorefrontController {
    * yet (a normal state, not an error — POST here to open it).
    */
   @Get('me')
+  @UseGuards(JwtAuthGuard)
   async getMine(@CurrentAccount() account: AuthenticatedAccount) {
     if (!account.roles.includes('admin')) {
       throw new RoleRequiredError('Solo un administrador puede ver esto.');
@@ -131,6 +136,8 @@ export class StorefrontController {
     };
   }
 
+  /** Public — a shopper can view the store and its products before
+   * creating an account (see StorefrontScreen/ProductDetailScreen). */
   @Get(':providerId')
   async getPublic(@Param('providerId') providerId: string) {
     const storefront = await this.storefronts.findOne({
@@ -156,6 +163,7 @@ export class StorefrontController {
    * come from the CatalogItem, not the caller.
    */
   @Post('me/products')
+  @UseGuards(JwtAuthGuard)
   async addProduct(
     @Body() dto: AddProductDto,
     @CurrentAccount() account: AuthenticatedAccount,
