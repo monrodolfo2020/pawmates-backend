@@ -12,6 +12,7 @@ import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Account } from '../../identity/domain/entities/account.entity';
+import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../domain/entities/provider-profile.entity';
 import { SaveProviderProfileDto } from './dto/save-provider-profile.dto';
 
@@ -29,6 +30,8 @@ export class ProvidersController {
     @InjectRepository(ProviderProfile)
     private readonly profiles: Repository<ProviderProfile>,
     @InjectRepository(Account) private readonly accounts: Repository<Account>,
+    @InjectRepository(ProviderVerification)
+    private readonly verifications: Repository<ProviderVerification>,
   ) {}
 
   /** Public directory — only published profiles (bio + price both set). */
@@ -38,8 +41,14 @@ export class ProvidersController {
       where: { isPublished: true },
       order: { createdAt: 'DESC' },
     });
-    const accountById = await this.loadAccounts(rows.map((r) => r.accountId));
-    return { data: rows.map((p) => toDirectoryResponse(p, accountById.get(p.accountId))) };
+    const accountIds = rows.map((r) => r.accountId);
+    const accountById = await this.loadAccounts(accountIds);
+    const verifiedIds = await this.loadVerifiedIds(accountIds);
+    return {
+      data: rows.map((p) =>
+        toDirectoryResponse(p, accountById.get(p.accountId), verifiedIds.has(p.accountId)),
+      ),
+    };
   }
 
   /** A provider's own profile — draft or published, for the edit screen. */
@@ -104,13 +113,24 @@ export class ProvidersController {
       throw new ResourceNotFoundError('Este paseador todavía no tiene una página publicada.');
     }
     const account = await this.accounts.findOne({ where: { id: accountId } });
-    return { data: toDetailResponse(profile, account) };
+    const verified = await this.verifications.findOne({
+      where: { accountId, status: 'verified' },
+    });
+    return { data: toDetailResponse(profile, account, verified !== null) };
   }
 
   private async loadAccounts(accountIds: string[]): Promise<Map<string, Account>> {
     if (!accountIds.length) return new Map();
     const rows = await this.accounts.find({ where: { id: In(accountIds) } });
     return new Map(rows.map((a) => [a.id, a]));
+  }
+
+  private async loadVerifiedIds(accountIds: string[]): Promise<Set<string>> {
+    if (!accountIds.length) return new Set();
+    const rows = await this.verifications.find({
+      where: { accountId: In(accountIds), status: 'verified' },
+    });
+    return new Set(rows.map((v) => v.accountId));
   }
 }
 
@@ -123,7 +143,11 @@ function assertProvider(account: AuthenticatedAccount): void {
 // Deliberately excludes address/idNumber/age/phone — those are only for
 // the provider themselves and (eventually) admin verification, never for
 // an anonymous or logged-in shopper. See ProviderProfile's comment.
-function toDirectoryResponse(profile: ProviderProfile, account: Account | undefined) {
+function toDirectoryResponse(
+  profile: ProviderProfile,
+  account: Account | undefined,
+  identityVerified: boolean,
+) {
   return {
     accountId: profile.accountId,
     name: account?.name ?? 'Paseador',
@@ -133,14 +157,18 @@ function toDirectoryResponse(profile: ProviderProfile, account: Account | undefi
     price: profile.price,
     plansOffered: profile.plansOffered,
     walkingSpots: profile.walkingSpots,
-    // A boolean trust signal, not PII — safe to show a shopper, unlike
-    // the actual address/idNumber/age/phone above.
+    // Boolean trust signals, not PII — safe to show a shopper, unlike
+    // the actual address/idNumber/age/phone above. identityVerified
+    // reflects an admin's decision on POST/PATCH
+    // /v1/admin/provider-verifications/:id, not the raw face/ID photos
+    // themselves (those never leave the admin surface).
     emailVerified: account?.emailVerifiedAt != null,
+    identityVerified,
   };
 }
 
 // Same private-field exclusion as toDirectoryResponse above.
-function toDetailResponse(profile: ProviderProfile, account: Account | null) {
+function toDetailResponse(profile: ProviderProfile, account: Account | null, identityVerified: boolean) {
   return {
     accountId: profile.accountId,
     name: account?.name ?? 'Paseador',
@@ -152,6 +180,7 @@ function toDetailResponse(profile: ProviderProfile, account: Account | null) {
     plansOffered: profile.plansOffered,
     walkingSpots: profile.walkingSpots,
     emailVerified: account?.emailVerifiedAt != null,
+    identityVerified,
   };
 }
 

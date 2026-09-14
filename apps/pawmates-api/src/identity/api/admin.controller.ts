@@ -17,6 +17,7 @@ import { Order } from '../../commerce/domain/entities/order.entity';
 import { Product } from '../../commerce/domain/entities/product.entity';
 import { Storefront } from '../../commerce/domain/entities/storefront.entity';
 import { UpdateCatalogItemDto } from '../../commerce/api/dto/update-catalog-item.dto';
+import { UpdateProviderVerificationDto } from './dto/update-provider-verification.dto';
 
 function assertAdmin(account: AuthenticatedAccount): void {
   if (!account.roles.includes('admin')) {
@@ -27,9 +28,10 @@ function assertAdmin(account: AuthenticatedAccount): void {
 }
 
 /**
- * Minimal admin surface: see who's registered and review pending provider
- * verifications. No signup path grants 'admin' (see README) — the first
- * admin account is promoted by hand, directly in Postgres.
+ * Minimal admin surface: see who's registered, and approve or reject
+ * provider identity verifications. No signup path grants 'admin' (see
+ * README) — the first admin account is promoted by hand, directly in
+ * Postgres.
  */
 @Controller('v1/admin')
 @UseGuards(JwtAuthGuard)
@@ -77,6 +79,35 @@ export class AdminController {
         idDocumentPhoto: v.idDocumentPhotoBase64,
         createdAt: v.createdAt,
       })),
+    };
+  }
+
+  /** Approve or reject a provider's pending identity verification — the
+   * one action that turns "no automated check runs against these yet"
+   * (see ProviderVerification's comment) into a real decision. Doesn't
+   * gate booking eligibility today (see TrustSafetyPort's Fake adapter),
+   * only the public "Identidad verificada" badge (see
+   * ProvidersController) — deliberately left that way, not a bug. */
+  @Patch('provider-verifications/:id')
+  async updateVerification(
+    @Param('id') id: string,
+    @Body() dto: UpdateProviderVerificationDto,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    assertAdmin(account);
+    const verification = await this.verifications.findOne({ where: { id } });
+    if (!verification) {
+      throw new ResourceNotFoundError(`Verificación ${id} no existe.`);
+    }
+    verification.status = dto.status;
+    await this.verifications.save(verification);
+    return {
+      data: {
+        id: verification.id,
+        accountId: verification.accountId,
+        status: verification.status,
+        createdAt: verification.createdAt,
+      },
     };
   }
 
