@@ -205,9 +205,10 @@ export class BookingController {
    * senderRole comes from activeContext (the same header/mode-toggle
    * `list()` above already keys off of), not a strict participant check
    * against this booking's own owner_id/provider_id — matching
-   * accept/reject/cancel and the trip endpoints' existing looseness here
-   * (see FakeMarketplaceAdapter's comment for why a strict check isn't
-   * meaningful yet without a real Marketplace assigning real providers).
+   * accept/reject/cancel and the trip endpoints' existing looseness (see
+   * TripsController's comment: that gap predates the real Marketplace
+   * and is now meaningful to close, just not done in the same pass that
+   * introduced it).
    */
   @Post(':id/messages')
   async sendMessage(

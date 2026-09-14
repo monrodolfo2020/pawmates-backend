@@ -20,6 +20,7 @@ import { Storefront } from '../../commerce/domain/entities/storefront.entity';
 import { Account } from '../../identity/domain/entities/account.entity';
 import { Pet } from '../../identity/domain/entities/pet.entity';
 import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
+import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 import { libsqlConnectionOptions } from './libsql-connection';
 
 /**
@@ -27,8 +28,9 @@ import { libsqlConnectionOptions } from './libsql-connection';
  * by tests that spin up a real schema — the app itself gets its
  * connection via TypeOrmModule.forRoot in app.module.ts. Covers every
  * Bounded Context's migrations; table names are prefixed per context
- * (`identity_*` / `booking_*` / `commerce_*`) since SQLite/libSQL has no
- * schema concept to separate them the way Postgres did.
+ * (`identity_*` / `providers_*` / `booking_*` / `commerce_*`) since
+ * SQLite/libSQL has no schema concept to separate them the way Postgres
+ * did.
  */
 const pawmatesDataSource = new DataSource({
   ...libsqlConnectionOptions(),
@@ -36,6 +38,7 @@ const pawmatesDataSource = new DataSource({
     Account,
     Pet,
     ProviderVerification,
+    ProviderProfile,
     Booking,
     BookingLine,
     CancellationRecord,
@@ -56,6 +59,7 @@ const pawmatesDataSource = new DataSource({
   ],
   migrations: [
     __dirname + '/../../identity/infra/persistence/migrations/*.{ts,js}',
+    __dirname + '/../../providers/infra/persistence/migrations/*.{ts,js}',
     __dirname + '/../../booking/infra/persistence/migrations/*.{ts,js}',
     __dirname + '/../../commerce/infra/persistence/migrations/*.{ts,js}',
     __dirname + '/migrations/*.{ts,js}',

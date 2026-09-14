@@ -45,14 +45,18 @@ import { LogWalkEventDto } from './dto/log-walk-event.dto';
  * start/complete/locations/events only require being authenticated, not
  * specifically the booking's assigned provider — matching
  * BookingController's accept/reject/cancel, which have the same gap.
- * Both are downstream of the same root cause: FakeMarketplaceAdapter
- * always resolves every booking to one fixed demo provider id (see its
- * own comment), so no real signed-up provider account could ever pass a
- * strict identity check today — enforcing one here would make this
- * feature untestable through the app itself. Revisit once there's a real
- * Marketplace doing real provider assignment. GET still checks the
- * caller is a real participant (owner/provider/admin), since that's
- * unaffected by the fake-assignment gap and costs nothing to keep.
+ * This used to be unavoidable: the old fake Marketplace adapter resolved
+ * every booking to whatever id the client sent, so no real signed-up
+ * provider account could ever pass a strict identity check, and
+ * enforcing one here would have made the feature untestable through the
+ * app itself. That's no longer true — ProviderMarketplaceAdapter now
+ * resolves bookings to real ProviderProfile-backed accounts (see its
+ * comment) — so a strict `booking.providerId === account.accountId`
+ * check is finally meaningful here. Left as-is in this pass to keep the
+ * "real provider directory" change isolated from a "who can operate on
+ * a booking" security change; still worth tightening as a deliberate
+ * follow-up. GET still checks the caller is a real participant
+ * (owner/provider/admin), since that was never affected by this gap.
  */
 @Controller('v1/trips')
 @UseGuards(JwtAuthGuard)

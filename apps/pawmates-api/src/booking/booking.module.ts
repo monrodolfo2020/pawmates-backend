@@ -17,9 +17,10 @@ import { MARKETPLACE_PORT } from './domain/ports/marketplace.port';
 import { PAYMENTS_PORT } from './domain/ports/payments.port';
 import { TRUST_SAFETY_PORT } from './domain/ports/trust-safety.port';
 import { BookingProcessManager } from './domain/saga/booking-process-manager';
-import { FakeMarketplaceAdapter } from './infra/adapters/fake-marketplace.adapter';
 import { FakeBookingPaymentsAdapter } from './infra/adapters/fake-payments.adapter';
 import { FakeTrustSafetyAdapter } from './infra/adapters/fake-trust-safety.adapter';
+import { ProviderMarketplaceAdapter } from '../providers/infra/adapters/provider-marketplace.adapter';
+import { ProvidersModule } from '../providers/providers.module';
 
 /**
  * Booking Bounded Context. Consolidated-MVP shape (see README): the three
@@ -33,6 +34,7 @@ import { FakeTrustSafetyAdapter } from './infra/adapters/fake-trust-safety.adapt
  */
 @Module({
   imports: [
+    ProvidersModule,
     TypeOrmModule.forFeature([
       Booking,
       BookingLine,
@@ -51,10 +53,9 @@ import { FakeTrustSafetyAdapter } from './infra/adapters/fake-trust-safety.adapt
   providers: [
     BookingProcessManager,
     NoDoubleBookingPolicy,
-    FakeMarketplaceAdapter,
     FakeTrustSafetyAdapter,
     FakeBookingPaymentsAdapter,
-    { provide: MARKETPLACE_PORT, useExisting: FakeMarketplaceAdapter },
+    { provide: MARKETPLACE_PORT, useExisting: ProviderMarketplaceAdapter },
     { provide: TRUST_SAFETY_PORT, useExisting: FakeTrustSafetyAdapter },
     { provide: PAYMENTS_PORT, useExisting: FakeBookingPaymentsAdapter },
     { provide: IDEMPOTENCY_SERVICE_NAME, useValue: 'booking' },
