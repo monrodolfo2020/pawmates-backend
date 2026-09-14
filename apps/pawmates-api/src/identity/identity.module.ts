@@ -13,6 +13,7 @@ import { CatalogItem } from '../commerce/domain/entities/catalog-item.entity';
 import { Order } from '../commerce/domain/entities/order.entity';
 import { Product } from '../commerce/domain/entities/product.entity';
 import { Storefront } from '../commerce/domain/entities/storefront.entity';
+import { ProviderProfile } from '../providers/domain/entities/provider-profile.entity';
 
 @Module({
   imports: [
@@ -29,6 +30,10 @@ import { Storefront } from '../commerce/domain/entities/storefront.entity';
       Product,
       Order,
       CatalogItem,
+      // Also read-only here — same reasoning, lets AdminController show
+      // whether an approved paseador has actually published their page
+      // yet (see listVerifications' profilePublished field).
+      ProviderProfile,
     ]),
   ],
   controllers: [AuthController, MeController, PetsController, AdminController],

@@ -18,6 +18,7 @@ import { Product } from '../../commerce/domain/entities/product.entity';
 import { Storefront } from '../../commerce/domain/entities/storefront.entity';
 import { UpdateCatalogItemDto } from '../../commerce/api/dto/update-catalog-item.dto';
 import { UpdateProviderVerificationDto } from './dto/update-provider-verification.dto';
+import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 
 function assertAdmin(account: AuthenticatedAccount): void {
   if (!account.roles.includes('admin')) {
@@ -46,6 +47,8 @@ export class AdminController {
     @InjectRepository(Order) private readonly orders: Repository<Order>,
     @InjectRepository(CatalogItem)
     private readonly catalogItems: Repository<CatalogItem>,
+    @InjectRepository(ProviderProfile)
+    private readonly providerProfiles: Repository<ProviderProfile>,
   ) {}
 
   @Get('accounts')
@@ -70,6 +73,16 @@ export class AdminController {
     const rows = await this.verifications.find({
       order: { createdAt: 'DESC' },
     });
+    const accountIds = rows.map((v) => v.accountId);
+    const publishedIds = accountIds.length
+      ? new Set(
+          (
+            await this.providerProfiles.find({
+              where: { accountId: In(accountIds), isPublished: true },
+            })
+          ).map((p) => p.accountId),
+        )
+      : new Set<string>();
     return {
       data: rows.map((v) => ({
         id: v.id,
@@ -77,6 +90,12 @@ export class AdminController {
         status: v.status,
         facePhoto: v.facePhotoBase64,
         idDocumentPhoto: v.idDocumentPhotoBase64,
+        // Approving identity (this row) and publishing the store page
+        // (ProviderProfile — bio + price both set) are independent —
+        // this flags a verified/approved paseador who still hasn't
+        // finished their page, the thing that actually makes them show
+        // up in the shopper-facing directory.
+        profilePublished: publishedIds.has(v.accountId),
         createdAt: v.createdAt,
       })),
     };
