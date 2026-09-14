@@ -34,6 +34,7 @@ export class MeController {
         email: found.email,
         name: found.name,
         roles: found.roles,
+        emailVerified: found.emailVerifiedAt !== null,
       },
     };
   }

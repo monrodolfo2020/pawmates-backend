@@ -56,6 +56,7 @@ export class AdminController {
         email: a.email,
         name: a.name,
         roles: a.roles,
+        emailVerified: a.emailVerifiedAt !== null,
         createdAt: a.createdAt,
       })),
     };

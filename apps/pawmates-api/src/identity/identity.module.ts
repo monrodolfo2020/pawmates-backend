@@ -6,6 +6,7 @@ import { AuthService } from './api/auth.service';
 import { MeController } from './api/me.controller';
 import { PetsController } from './api/pets.controller';
 import { Account } from './domain/entities/account.entity';
+import { EmailVerificationCode } from './domain/entities/email-verification-code.entity';
 import { Pet } from './domain/entities/pet.entity';
 import { ProviderVerification } from './domain/entities/provider-verification.entity';
 import { CatalogItem } from '../commerce/domain/entities/catalog-item.entity';
@@ -19,6 +20,7 @@ import { Storefront } from '../commerce/domain/entities/storefront.entity';
       Account,
       Pet,
       ProviderVerification,
+      EmailVerificationCode,
       // Read-only for AdminController's platform-wide oversight — Commerce
       // still owns writes to these via CommerceModule/CommerceProcessManager.
       // CatalogItem is the one exception: admin manages it directly (adding

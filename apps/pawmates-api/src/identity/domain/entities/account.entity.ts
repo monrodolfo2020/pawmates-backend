@@ -30,6 +30,11 @@ export class Account {
   @Column({ type: 'simple-json' })
   roles!: Role[];
 
+  // Null until a POST /v1/auth/verify-email call succeeds — see
+  // EmailVerificationCode. Never set any other way.
+  @Column({ name: 'email_verified_at', type: 'datetime', nullable: true })
+  emailVerifiedAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
@@ -39,5 +44,9 @@ export class Account {
 
   addRole(role: Role): void {
     if (!this.roles.includes(role)) this.roles = [...this.roles, role];
+  }
+
+  markEmailVerified(): void {
+    this.emailVerifiedAt = new Date();
   }
 }

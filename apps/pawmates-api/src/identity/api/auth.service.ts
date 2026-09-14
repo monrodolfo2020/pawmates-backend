@@ -1,15 +1,19 @@
 import {
   EmailAlreadyRegisteredError,
   InvalidCredentialsError,
+  ResourceNotFoundError,
+  ValidationError,
+  sendVerificationEmail,
   uploadBase64Photo,
 } from '@pawmates/common';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
 import { Repository } from 'typeorm';
 import { Account } from '../domain/entities/account.entity';
 import type { Role } from '../domain/entities/account.entity';
+import { EmailVerificationCode } from '../domain/entities/email-verification-code.entity';
 import { ProviderVerification } from '../domain/entities/provider-verification.entity';
 
 const SALT_ROUNDS = 10;
@@ -22,10 +26,14 @@ export interface AuthResult {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(Account) private readonly accounts: Repository<Account>,
     @InjectRepository(ProviderVerification)
     private readonly verifications: Repository<ProviderVerification>,
+    @InjectRepository(EmailVerificationCode)
+    private readonly verificationCodes: Repository<EmailVerificationCode>,
     private readonly jwt: JwtService,
   ) {}
 
@@ -51,6 +59,7 @@ export class AuthService {
     account.passwordHash = await bcrypt.hash(params.password, SALT_ROUNDS);
     account.name = params.name ?? null;
     account.roles = [params.role];
+    account.emailVerifiedAt = null;
     await this.accounts.save(account);
 
     if (params.role === 'provider') {
@@ -60,6 +69,12 @@ export class AuthService {
         params.idDocumentPhoto!,
       );
     }
+
+    // Fire-and-forget — a slow or misconfigured email provider (see
+    // sendVerificationEmail's comment on RESEND_API_KEY) should never
+    // fail signup itself; the account can always request a fresh code
+    // later via POST /v1/auth/send-verification-email.
+    void this.dispatchVerificationEmail(account);
 
     return this.issueToken(account);
   }
@@ -114,6 +129,60 @@ export class AuthService {
     verification.idDocumentPhotoBase64 = await uploadBase64Photo(idDocumentPhoto, 'verifications');
     verification.status = 'pending';
     await this.verifications.save(verification);
+  }
+
+  /** Issues a fresh code (replacing any still-active one — see
+   * EmailVerificationCode's comment) and emails it. Public: also used by
+   * POST /v1/auth/send-verification-email to resend after the first
+   * code expired or never arrived. */
+  async sendVerificationEmail(accountId: string): Promise<void> {
+    const account = await this.accounts.findOne({ where: { id: accountId } });
+    if (!account) throw new ResourceNotFoundError('Cuenta no encontrada.');
+    if (account.emailVerifiedAt) {
+      throw new ValidationError('Tu correo ya está verificado.');
+    }
+    await this.dispatchVerificationEmail(account);
+  }
+
+  async verifyEmail(accountId: string, code: string): Promise<void> {
+    const account = await this.accounts.findOne({ where: { id: accountId } });
+    if (!account) throw new ResourceNotFoundError('Cuenta no encontrada.');
+    if (account.emailVerifiedAt) return; // already verified — idempotent
+
+    const record = await this.verificationCodes.findOne({ where: { accountId } });
+    if (!record) {
+      throw new ValidationError('Pide un código nuevo antes de verificar.');
+    }
+    record.assertValid(code);
+    record.consume();
+    await this.verificationCodes.save(record);
+
+    account.markEmailVerified();
+    await this.accounts.save(account);
+  }
+
+  private async dispatchVerificationEmail(account: Account): Promise<void> {
+    const existing = await this.verificationCodes.findOne({
+      where: { accountId: account.id },
+    });
+    const record = existing ?? EmailVerificationCode.issue(account.id);
+    if (existing) {
+      // Overwrite in place — one active code per account (unique
+      // account_id), so re-issuing means replacing, not inserting.
+      const fresh = EmailVerificationCode.issue(account.id);
+      record.code = fresh.code;
+      record.expiresAt = fresh.expiresAt;
+      record.consumedAt = null;
+    }
+    await this.verificationCodes.save(record);
+
+    try {
+      await sendVerificationEmail(account.email, record.code);
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo enviar el correo de verificación a ${account.email}: ${(err as Error).message}`,
+      );
+    }
   }
 
   private async issueToken(account: Account): Promise<AuthResult> {

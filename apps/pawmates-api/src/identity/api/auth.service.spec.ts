@@ -1,12 +1,15 @@
 import {
   EmailAlreadyRegisteredError,
   InvalidCredentialsError,
+  ResourceNotFoundError,
+  ValidationError,
 } from '@pawmates/common';
 import { JwtService } from '@nestjs/jwt';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service';
 import { Account } from '../domain/entities/account.entity';
+import { EmailVerificationCode } from '../domain/entities/email-verification-code.entity';
 import { ProviderVerification } from '../domain/entities/provider-verification.entity';
 
 // Real uploads need a network call + BLOB_READ_WRITE_TOKEN — this only
@@ -24,6 +27,9 @@ describe('AuthService', () => {
   >;
   let verifications: jest.Mocked<
     Pick<Repository<ProviderVerification>, 'findOne' | 'save'>
+  >;
+  let verificationCodes: jest.Mocked<
+    Pick<Repository<EmailVerificationCode>, 'findOne' | 'save'>
   >;
   let jwt: jest.Mocked<Pick<JwtService, 'signAsync'>>;
 
@@ -44,11 +50,20 @@ describe('AuthService', () => {
       findOne: jest.fn(),
       save: jest.fn((v) => Promise.resolve(v as ProviderVerification)),
     };
+    // The fire-and-forget verification-email dispatch (see signup's
+    // `void this.dispatchVerificationEmail(...)`) touches this on every
+    // signup/login-adjacent call — findOne resolving to null keeps it on
+    // the "issue a fresh code" path without erroring.
+    verificationCodes = {
+      findOne: jest.fn().mockResolvedValue(null),
+      save: jest.fn((v) => Promise.resolve(v as EmailVerificationCode)),
+    };
     jwt = { signAsync: jest.fn().mockResolvedValue('signed-token') };
 
     service = new AuthService(
       accounts as unknown as Repository<Account>,
       verifications as unknown as Repository<ProviderVerification>,
+      verificationCodes as unknown as Repository<EmailVerificationCode>,
       jwt as unknown as JwtService,
     );
   });
@@ -161,6 +176,94 @@ describe('AuthService', () => {
 
       expect(result.roles).toEqual(['owner', 'provider']);
       expect(verifications.save).toHaveBeenCalled();
+    });
+  });
+
+  describe('sendVerificationEmail', () => {
+    it('issues a fresh code for an unverified account', async () => {
+      const account = new Account();
+      account.id = 'acc-1';
+      account.email = 'owner@test.com';
+      account.emailVerifiedAt = null;
+      accounts.findOne.mockResolvedValue(account);
+      verificationCodes.findOne.mockResolvedValue(null);
+
+      await service.sendVerificationEmail('acc-1');
+
+      expect(verificationCodes.save).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId: 'acc-1', consumedAt: null }),
+      );
+    });
+
+    it('refuses to resend once the account is already verified', async () => {
+      const account = new Account();
+      account.id = 'acc-1';
+      account.emailVerifiedAt = new Date();
+      accounts.findOne.mockResolvedValue(account);
+
+      await expect(service.sendVerificationEmail('acc-1')).rejects.toThrow(ValidationError);
+      expect(verificationCodes.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown account', async () => {
+      accounts.findOne.mockResolvedValue(null);
+      await expect(service.sendVerificationEmail('nope')).rejects.toThrow(
+        ResourceNotFoundError,
+      );
+    });
+  });
+
+  describe('verifyEmail', () => {
+    it('marks the account verified when the code matches', async () => {
+      const account = new Account();
+      account.id = 'acc-1';
+      account.emailVerifiedAt = null;
+      accounts.findOne.mockResolvedValue(account);
+
+      const record = EmailVerificationCode.issue('acc-1');
+      verificationCodes.findOne.mockResolvedValue(record);
+
+      await service.verifyEmail('acc-1', record.code);
+
+      expect(account.emailVerifiedAt).not.toBeNull();
+      expect(record.consumedAt).not.toBeNull();
+      expect(accounts.save).toHaveBeenCalledWith(account);
+      expect(verificationCodes.save).toHaveBeenCalledWith(record);
+    });
+
+    it('rejects a wrong code without verifying the account', async () => {
+      const account = new Account();
+      account.id = 'acc-1';
+      account.emailVerifiedAt = null;
+      accounts.findOne.mockResolvedValue(account);
+
+      const record = EmailVerificationCode.issue('acc-1');
+      const wrongCode = record.code === '000000' ? '111111' : '000000';
+      verificationCodes.findOne.mockResolvedValue(record);
+
+      await expect(service.verifyEmail('acc-1', wrongCode)).rejects.toThrow(ValidationError);
+      expect(account.emailVerifiedAt).toBeNull();
+    });
+
+    it('is a no-op when the account is already verified', async () => {
+      const account = new Account();
+      account.id = 'acc-1';
+      account.emailVerifiedAt = new Date();
+      accounts.findOne.mockResolvedValue(account);
+
+      await service.verifyEmail('acc-1', '123456');
+      expect(accounts.save).not.toHaveBeenCalled();
+      expect(verificationCodes.findOne).not.toHaveBeenCalled();
+    });
+
+    it('rejects when no code was ever requested', async () => {
+      const account = new Account();
+      account.id = 'acc-1';
+      account.emailVerifiedAt = null;
+      accounts.findOne.mockResolvedValue(account);
+      verificationCodes.findOne.mockResolvedValue(null);
+
+      await expect(service.verifyEmail('acc-1', '123456')).rejects.toThrow(ValidationError);
     });
   });
 });

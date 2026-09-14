@@ -24,6 +24,7 @@ import { Product } from './commerce/domain/entities/product.entity';
 import { Storefront } from './commerce/domain/entities/storefront.entity';
 import { IdentityModule } from './identity/identity.module';
 import { Account } from './identity/domain/entities/account.entity';
+import { EmailVerificationCode } from './identity/domain/entities/email-verification-code.entity';
 import { Pet } from './identity/domain/entities/pet.entity';
 import { ProviderVerification } from './identity/domain/entities/provider-verification.entity';
 import { libsqlConnectionOptions } from './infra/persistence/libsql-connection';
@@ -51,6 +52,7 @@ import { TripsController } from './trips/trips.controller';
         Account,
         Pet,
         ProviderVerification,
+        EmailVerificationCode,
         ProviderProfile,
         Booking,
         BookingLine,

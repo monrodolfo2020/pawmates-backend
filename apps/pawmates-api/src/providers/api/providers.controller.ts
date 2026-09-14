@@ -133,6 +133,9 @@ function toDirectoryResponse(profile: ProviderProfile, account: Account | undefi
     price: profile.price,
     plansOffered: profile.plansOffered,
     walkingSpots: profile.walkingSpots,
+    // A boolean trust signal, not PII — safe to show a shopper, unlike
+    // the actual address/idNumber/age/phone above.
+    emailVerified: account?.emailVerifiedAt != null,
   };
 }
 
@@ -148,6 +151,7 @@ function toDetailResponse(profile: ProviderProfile, account: Account | null) {
     price: profile.price,
     plansOffered: profile.plansOffered,
     walkingSpots: profile.walkingSpots,
+    emailVerified: account?.emailVerifiedAt != null,
   };
 }
 
