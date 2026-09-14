@@ -15,6 +15,7 @@ import { Account } from '../domain/entities/account.entity';
 import type { Role } from '../domain/entities/account.entity';
 import { EmailVerificationCode } from '../domain/entities/email-verification-code.entity';
 import { ProviderVerification } from '../domain/entities/provider-verification.entity';
+import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 
 const SALT_ROUNDS = 10;
 
@@ -34,6 +35,8 @@ export class AuthService {
     private readonly verifications: Repository<ProviderVerification>,
     @InjectRepository(EmailVerificationCode)
     private readonly verificationCodes: Repository<EmailVerificationCode>,
+    @InjectRepository(ProviderProfile)
+    private readonly providerProfiles: Repository<ProviderProfile>,
     private readonly jwt: JwtService,
   ) {}
 
@@ -44,6 +47,7 @@ export class AuthService {
     name?: string;
     facePhoto?: string;
     idDocumentPhoto?: string;
+    profilePhoto?: string;
   }): Promise<AuthResult> {
     const existing = await this.accounts.findOne({
       where: { email: params.email.toLowerCase() },
@@ -68,6 +72,7 @@ export class AuthService {
         params.facePhoto!,
         params.idDocumentPhoto!,
       );
+      await this.seedInitialProfilePhoto(account.id, params.profilePhoto);
     }
 
     // Fire-and-forget — a slow or misconfigured email provider (see
@@ -95,6 +100,7 @@ export class AuthService {
       role: 'owner' | 'provider';
       facePhoto?: string;
       idDocumentPhoto?: string;
+      profilePhoto?: string;
     },
   ): Promise<AuthResult> {
     const account = await this.accounts.findOneOrFail({
@@ -109,6 +115,7 @@ export class AuthService {
         params.facePhoto!,
         params.idDocumentPhoto!,
       );
+      await this.seedInitialProfilePhoto(account.id, params.profilePhoto);
     }
 
     return this.issueToken(account);
@@ -129,6 +136,23 @@ export class AuthService {
     verification.idDocumentPhotoBase64 = await uploadBase64Photo(idDocumentPhoto, 'verifications');
     verification.status = 'pending';
     await this.verifications.save(verification);
+  }
+
+  /** Optional — lets a new provider start their public page with a photo
+   * right away (reusing their just-taken face photo, or a different one
+   * they picked) instead of landing on a bare "Editar mi página pública"
+   * later. Only ever runs once, at signup/addRole, so there's no existing
+   * ProviderProfile yet to clobber; the provider is free to change this
+   * photo anytime afterward — unlike facePhoto/idDocumentPhoto above,
+   * which stay fixed in ProviderVerification for admin review. */
+  private async seedInitialProfilePhoto(
+    accountId: string,
+    profilePhoto?: string,
+  ): Promise<void> {
+    if (!profilePhoto) return;
+    const profile = ProviderProfile.draft(accountId);
+    profile.update({ photo: await uploadBase64Photo(profilePhoto, 'providers') });
+    await this.providerProfiles.save(profile);
   }
 
   /** Issues a fresh code (replacing any still-active one — see

@@ -30,9 +30,11 @@ import { ProviderProfile } from '../providers/domain/entities/provider-profile.e
       Product,
       Order,
       CatalogItem,
-      // Also read-only here — same reasoning, lets AdminController show
-      // whether an approved paseador has actually published their page
-      // yet (see listVerifications' profilePublished field).
+      // Read-only for AdminController (see listVerifications'
+      // profilePublished field) and written once by AuthService to seed a
+      // brand-new provider's public photo at signup (see
+      // AuthService.seedInitialProfilePhoto) — ProvidersModule still owns
+      // every other write to it via ProvidersController.
       ProviderProfile,
     ]),
   ],

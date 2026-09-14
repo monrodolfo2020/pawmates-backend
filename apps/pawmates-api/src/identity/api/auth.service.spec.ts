@@ -11,6 +11,7 @@ import { AuthService } from './auth.service';
 import { Account } from '../domain/entities/account.entity';
 import { EmailVerificationCode } from '../domain/entities/email-verification-code.entity';
 import { ProviderVerification } from '../domain/entities/provider-verification.entity';
+import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 
 // Real uploads need a network call + BLOB_READ_WRITE_TOKEN — this only
 // verifies AuthService hands the right value to it, not the upload itself
@@ -31,6 +32,7 @@ describe('AuthService', () => {
   let verificationCodes: jest.Mocked<
     Pick<Repository<EmailVerificationCode>, 'findOne' | 'save'>
   >;
+  let providerProfiles: jest.Mocked<Pick<Repository<ProviderProfile>, 'save'>>;
   let jwt: jest.Mocked<Pick<JwtService, 'signAsync'>>;
 
   beforeEach(() => {
@@ -58,12 +60,16 @@ describe('AuthService', () => {
       findOne: jest.fn().mockResolvedValue(null),
       save: jest.fn((v) => Promise.resolve(v as EmailVerificationCode)),
     };
+    providerProfiles = {
+      save: jest.fn((p) => Promise.resolve(p as ProviderProfile)),
+    };
     jwt = { signAsync: jest.fn().mockResolvedValue('signed-token') };
 
     service = new AuthService(
       accounts as unknown as Repository<Account>,
       verifications as unknown as Repository<ProviderVerification>,
       verificationCodes as unknown as Repository<EmailVerificationCode>,
+      providerProfiles as unknown as Repository<ProviderProfile>,
       jwt as unknown as JwtService,
     );
   });
@@ -124,6 +130,29 @@ describe('AuthService', () => {
           status: 'pending',
         }),
       );
+      expect(providerProfiles.save).not.toHaveBeenCalled();
+    });
+
+    it('seeds a public-page photo when the provider picks one at signup', async () => {
+      accounts.findOne.mockResolvedValue(null);
+      verifications.findOne.mockResolvedValue(null);
+
+      await service.signup({
+        email: 'walker2@test.com',
+        password: 'password123',
+        role: 'provider',
+        facePhoto: 'face-b64',
+        idDocumentPhoto: 'id-b64',
+        profilePhoto: 'face-b64', // "Usar esta fotografía" — reuses the face photo
+      });
+
+      expect(providerProfiles.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'generated-account-id',
+          photoBase64: 'https://blob.test/face-b64',
+          isPublished: false, // no bio/price yet — a photo alone never publishes
+        }),
+      );
     });
   });
 
@@ -176,6 +205,26 @@ describe('AuthService', () => {
 
       expect(result.roles).toEqual(['owner', 'provider']);
       expect(verifications.save).toHaveBeenCalled();
+      expect(providerProfiles.save).not.toHaveBeenCalled();
+    });
+
+    it('seeds a public-page photo when profilePhoto is given', async () => {
+      const account = new Account();
+      account.id = 'acc-1';
+      account.roles = ['owner'];
+      accounts.findOneOrFail.mockResolvedValue(account);
+      verifications.findOne.mockResolvedValue(null);
+
+      await service.addRole('acc-1', {
+        role: 'provider',
+        facePhoto: 'face-b64',
+        idDocumentPhoto: 'id-b64',
+        profilePhoto: 'face-b64',
+      });
+
+      expect(providerProfiles.save).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId: 'acc-1', photoBase64: 'https://blob.test/face-b64' }),
+      );
     });
   });
 

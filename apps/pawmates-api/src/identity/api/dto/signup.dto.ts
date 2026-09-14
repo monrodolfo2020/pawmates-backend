@@ -34,4 +34,14 @@ export class SignupDto {
   @IsString()
   @IsOptional()
   idDocumentPhoto?: string;
+
+  /** Optional — a provider can reuse `facePhoto` as their public page's
+   * photo (the app's "Usar esta fotografía" button) or pick a different
+   * one, right at signup instead of having to visit "Editar mi página
+   * pública" first. Seeds ProviderProfile.photoBase64; unrelated to
+   * facePhoto/idDocumentPhoto, which stay in ProviderVerification and are
+   * never editable (see AuthService.signup's comment). */
+  @IsString()
+  @IsOptional()
+  profilePhoto?: string;
 }

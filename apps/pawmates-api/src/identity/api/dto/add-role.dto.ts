@@ -12,4 +12,10 @@ export class AddRoleDto {
   @IsString()
   @IsOptional()
   idDocumentPhoto?: string;
+
+  /** Same "Usar esta fotografía" option as SignupDto.profilePhoto — see
+   * its comment. */
+  @IsString()
+  @IsOptional()
+  profilePhoto?: string;
 }
