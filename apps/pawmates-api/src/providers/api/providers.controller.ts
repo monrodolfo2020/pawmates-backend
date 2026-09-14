@@ -82,6 +82,14 @@ export class ProvidersController {
         dto.priceAmount === undefined
           ? undefined
           : Money.of(dto.priceAmount, dto.priceCurrency ?? 'MXN'),
+      plansOffered:
+        dto.plansOffered === undefined ? undefined : dto.plansOffered === '' ? null : dto.plansOffered,
+      walkingSpots:
+        dto.walkingSpots === undefined ? undefined : dto.walkingSpots === '' ? null : dto.walkingSpots,
+      address: dto.address === undefined ? undefined : dto.address === '' ? null : dto.address,
+      idNumber: dto.idNumber === undefined ? undefined : dto.idNumber === '' ? null : dto.idNumber,
+      age: dto.age === undefined ? undefined : dto.age,
+      phone: dto.phone === undefined ? undefined : dto.phone === '' ? null : dto.phone,
     });
     await this.profiles.save(profile);
     return { data: toOwnResponse(profile) };
@@ -112,6 +120,9 @@ function assertProvider(account: AuthenticatedAccount): void {
   }
 }
 
+// Deliberately excludes address/idNumber/age/phone — those are only for
+// the provider themselves and (eventually) admin verification, never for
+// an anonymous or logged-in shopper. See ProviderProfile's comment.
 function toDirectoryResponse(profile: ProviderProfile, account: Account | undefined) {
   return {
     accountId: profile.accountId,
@@ -120,9 +131,12 @@ function toDirectoryResponse(profile: ProviderProfile, account: Account | undefi
     serviceArea: profile.serviceArea,
     specialty: profile.specialty,
     price: profile.price,
+    plansOffered: profile.plansOffered,
+    walkingSpots: profile.walkingSpots,
   };
 }
 
+// Same private-field exclusion as toDirectoryResponse above.
 function toDetailResponse(profile: ProviderProfile, account: Account | null) {
   return {
     accountId: profile.accountId,
@@ -132,9 +146,13 @@ function toDetailResponse(profile: ProviderProfile, account: Account | null) {
     serviceArea: profile.serviceArea,
     specialty: profile.specialty,
     price: profile.price,
+    plansOffered: profile.plansOffered,
+    walkingSpots: profile.walkingSpots,
   };
 }
 
+// The only response shape that includes the private fields — this is the
+// provider looking at (and editing) their own page.
 function toOwnResponse(profile: ProviderProfile) {
   return {
     accountId: profile.accountId,
@@ -143,6 +161,12 @@ function toOwnResponse(profile: ProviderProfile) {
     serviceArea: profile.serviceArea,
     specialty: profile.specialty,
     price: profile.price,
+    plansOffered: profile.plansOffered,
+    walkingSpots: profile.walkingSpots,
+    address: profile.address,
+    idNumber: profile.idNumber,
+    age: profile.age,
+    phone: profile.phone,
     isPublished: profile.isPublished,
   };
 }

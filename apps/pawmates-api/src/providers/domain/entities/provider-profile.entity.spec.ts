@@ -60,4 +60,30 @@ describe('ProviderProfile aggregate', () => {
     const profile = ProviderProfile.draft('account-1');
     expect(() => profile.update({ serviceArea: '' })).toThrow(ValidationError);
   });
+
+  it('accepts the private trust/verification fields without affecting publish state', () => {
+    const profile = ProviderProfile.draft('account-1');
+    profile.update({ address: 'Calle Falsa 123', idNumber: 'INE-ABC123', age: 30, phone: '5512345678' });
+    expect(profile.address).toBe('Calle Falsa 123');
+    expect(profile.idNumber).toBe('INE-ABC123');
+    expect(profile.age).toBe(30);
+    expect(profile.phone).toBe('5512345678');
+    expect(profile.isPublished).toBe(false); // still no bio/price
+  });
+
+  it('rejects an age outside 18-90', () => {
+    const profile = ProviderProfile.draft('account-1');
+    expect(() => profile.update({ age: 17 })).toThrow(ValidationError);
+    expect(() => profile.update({ age: 91 })).toThrow(ValidationError);
+  });
+
+  it('accepts the public plans/spots fields', () => {
+    const profile = ProviderProfile.draft('account-1');
+    profile.update({
+      plansOffered: 'Paseo individual 30 min, plan semanal 3x',
+      walkingSpots: 'Parque México, Parque España',
+    });
+    expect(profile.plansOffered).toBe('Paseo individual 30 min, plan semanal 3x');
+    expect(profile.walkingSpots).toBe('Parque México, Parque España');
+  });
 });

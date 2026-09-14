@@ -12,7 +12,9 @@ import {
  * back to unset (the controller normalizes '' to null before handing it
  * to ProviderProfile.update(), which is what actually decides — via
  * whether bio+price are both present — whether the profile is publicly
- * visible; see that entity's comment).
+ * visible; see that entity's comment). address/idNumber/age/phone are
+ * private (never returned by a public endpoint) — see the entity's and
+ * ProvidersController's comments.
  */
 export class SaveProviderProfileDto {
   @IsString()
@@ -40,4 +42,29 @@ export class SaveProviderProfileDto {
   @IsIn(['MXN'])
   @IsOptional()
   priceCurrency?: string;
+
+  @IsString()
+  @IsOptional()
+  plansOffered?: string;
+
+  @IsString()
+  @IsOptional()
+  walkingSpots?: string;
+
+  @IsString()
+  @IsOptional()
+  address?: string;
+
+  @IsString()
+  @IsOptional()
+  idNumber?: string;
+
+  @IsInt()
+  @Min(18)
+  @IsOptional()
+  age?: number;
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
 }
