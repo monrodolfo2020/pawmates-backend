@@ -18,10 +18,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ulid } from 'ulid';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Booking } from '../domain/entities/booking.entity';
 import { BookingMessage } from '../domain/entities/booking-message.entity';
 import { BookingProcessManager } from '../domain/saga/booking-process-manager';
+import { Pet } from '../../identity/domain/entities/pet.entity';
+import { Account } from '../../identity/domain/entities/account.entity';
 import type { RecurrenceRule } from '../domain/value-objects/recurrence-rule';
 import {
   AcceptBookingDto,
@@ -42,6 +44,8 @@ export class BookingController {
     @InjectRepository(Booking) private readonly bookings: Repository<Booking>,
     @InjectRepository(BookingMessage)
     private readonly messages: Repository<BookingMessage>,
+    @InjectRepository(Pet) private readonly pets: Repository<Pet>,
+    @InjectRepository(Account) private readonly accounts: Repository<Account>,
   ) {}
 
   @Post()
@@ -89,7 +93,7 @@ export class BookingController {
     return {
       data: {
         recurrenceSeriesId: series.id,
-        bookings: bookings.map(toBookingResponse),
+        bookings: bookings.map((b) => toBookingResponse(b)),
       },
     };
   }
@@ -103,13 +107,15 @@ export class BookingController {
   ) {
     const qb = this.bookings
       .createQueryBuilder('b')
+      .leftJoinAndSelect('b.lines', 'lines')
+      .leftJoinAndSelect('b.priceBreakdown', 'priceBreakdown')
       .where(
         account.activeContext === 'owner'
           ? 'b.owner_id = :accountId'
           : 'b.provider_id = :accountId',
         { accountId: account.accountId },
       )
-      .orderBy('b.scheduled_at', 'DESC')
+      .orderBy('b.scheduledAt', 'DESC')
       .take(Math.min(Number(limit) || 20, 100));
 
     if (status) qb.andWhere('b.status = :status', { status });
@@ -124,7 +130,11 @@ export class BookingController {
         ? Buffer.from(rows[rows.length - 1].id).toString('base64')
         : null;
 
-    return { data: rows.map(toBookingResponse), meta: { cursor: nextCursor } };
+    const enrichment = await this.loadEnrichment(rows);
+    return {
+      data: rows.map((b) => toBookingResponse(b, enrichment)),
+      meta: { cursor: nextCursor },
+    };
   }
 
   @Get(':id')
@@ -133,15 +143,36 @@ export class BookingController {
       where: { id },
       relations: ['lines', 'priceBreakdown'],
     });
-    return { data: toBookingResponse(booking) };
+    const enrichment = await this.loadEnrichment([booking]);
+    return { data: toBookingResponse(booking, enrichment) };
+  }
+
+  /** Batch-loads the pet names and owner name this booking list needs to
+   * render as more than bare ids (e.g. "Toby · Beagle" on the paseador's
+   * Dashboard) — one query per entity, not N+1 per row. */
+  private async loadEnrichment(
+    rows: Booking[],
+  ): Promise<{ petNames: Map<string, string>; ownerNames: Map<string, string | null> }> {
+    const petIds = [...new Set(rows.flatMap((b) => b.lines?.map((l) => l.petId) ?? []))];
+    const ownerIds = [...new Set(rows.map((b) => b.ownerId))];
+    const [pets, owners]: [Pet[], Account[]] = await Promise.all([
+      petIds.length ? this.pets.find({ where: { id: In(petIds) } }) : Promise.resolve([]),
+      ownerIds.length ? this.accounts.find({ where: { id: In(ownerIds) } }) : Promise.resolve([]),
+    ]);
+    return {
+      petNames: new Map(pets.map((p) => [p.id, `${p.name} · ${p.breed}`])),
+      ownerNames: new Map(owners.map((o) => [o.id, o.name])),
+    };
   }
 
   @Post(':id/accept')
   async accept(
     @Param('id') id: string,
     @Body() dto: AcceptBookingDto,
+    @CurrentAccount() account: AuthenticatedAccount,
     @Headers('x-trace-id') traceId: string | undefined,
   ) {
+    await this.assertProviderOwnsBooking(id, account);
     const booking = await this.processManager.acceptBooking(
       id,
       dto.paymentMethodId,
@@ -157,6 +188,7 @@ export class BookingController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Headers('x-trace-id') traceId: string | undefined,
   ) {
+    await this.assertProviderOwnsBooking(id, account);
     const booking = await this.processManager.rejectBooking(
       id,
       account.accountId,
@@ -164,6 +196,21 @@ export class BookingController {
       traceId ?? ulid().toLowerCase(),
     );
     return { data: toBookingResponse(booking) };
+  }
+
+  /** accept/reject are the paseador deciding on a request addressed to
+   * them — unlike list()/messages above (which key off activeContext,
+   * see this controller's header comment on that looseness), a wrong or
+   * malicious accountId here would let anyone confirm or cancel someone
+   * else's booking, so this checks the booking's actual providerId. */
+  private async assertProviderOwnsBooking(
+    id: string,
+    account: AuthenticatedAccount,
+  ): Promise<void> {
+    const booking = await this.bookings.findOneOrFail({ where: { id } });
+    if (booking.providerId !== account.accountId) {
+      throw new RoleRequiredError('Esta solicitud no te pertenece.');
+    }
   }
 
   @Post(':id/cancel')
@@ -257,14 +304,21 @@ function toMessageResponse(message: BookingMessage) {
   };
 }
 
-function toBookingResponse(booking: Booking) {
+function toBookingResponse(
+  booking: Booking,
+  enrichment?: { petNames: Map<string, string>; ownerNames: Map<string, string | null> },
+) {
   return {
     id: booking.id,
     ownerId: booking.ownerId,
+    ownerName: enrichment?.ownerNames.get(booking.ownerId) ?? null,
     providerId: booking.providerId,
     status: booking.status,
     scheduledAt: booking.scheduledAt,
-    lines: booking.lines,
+    lines: (booking.lines ?? []).map((line) => ({
+      ...line,
+      petName: enrichment?.petNames.get(line.petId) ?? null,
+    })),
     priceBreakdown: booking.priceBreakdown
       ? {
           rateAmount: booking.priceBreakdown.rateAmount,

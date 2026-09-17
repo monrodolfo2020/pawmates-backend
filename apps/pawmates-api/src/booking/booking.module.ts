@@ -21,6 +21,8 @@ import { FakeBookingPaymentsAdapter } from './infra/adapters/fake-payments.adapt
 import { FakeTrustSafetyAdapter } from './infra/adapters/fake-trust-safety.adapter';
 import { ProviderMarketplaceAdapter } from '../providers/infra/adapters/provider-marketplace.adapter';
 import { ProvidersModule } from '../providers/providers.module';
+import { Pet } from '../identity/domain/entities/pet.entity';
+import { Account } from '../identity/domain/entities/account.entity';
 
 /**
  * Booking Bounded Context. Consolidated-MVP shape (see README): the three
@@ -47,6 +49,12 @@ import { ProvidersModule } from '../providers/providers.module';
       BookingMessage,
       OutboxEvent,
       IdempotencyKey,
+      // Read-only — lets BookingController's list()/getOne() show a pet's
+      // name and the owner's name on each booking (e.g. "Toby · Beagle"
+      // on the paseador's Dashboard) instead of just bare ids. Identity
+      // still owns every write to these.
+      Pet,
+      Account,
     ]),
   ],
   controllers: [BookingController],
