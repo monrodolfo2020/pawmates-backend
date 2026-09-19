@@ -18,12 +18,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { ulid } from 'ulid';
-import { In, Repository } from 'typeorm';
+import { Between, In, Repository } from 'typeorm';
 import { Booking } from '../domain/entities/booking.entity';
 import { BookingMessage } from '../domain/entities/booking-message.entity';
 import { BookingProcessManager } from '../domain/saga/booking-process-manager';
 import { Pet } from '../../identity/domain/entities/pet.entity';
 import { Account } from '../../identity/domain/entities/account.entity';
+import { BookingStatus } from '../domain/value-objects/booking-status';
 import type { RecurrenceRule } from '../domain/value-objects/recurrence-rule';
 import {
   AcceptBookingDto,
@@ -134,6 +135,63 @@ export class BookingController {
     return {
       data: rows.map((b) => toBookingResponse(b, enrichment)),
       meta: { cursor: nextCursor },
+    };
+  }
+
+  /** Real "Ingresos esta semana" / "Esta semana" data for the paseador
+   * Dashboard, replacing what used to be hardcoded mock numbers on the
+   * frontend. Must come before the `:id` route below — otherwise Nest
+   * would try to match "summary" as a booking id. */
+  @Get('summary')
+  async summary(@CurrentAccount() account: AuthenticatedAccount) {
+    if (!account.roles.includes('provider')) {
+      throw new RoleRequiredError('Esta acción requiere el rol de paseador.');
+    }
+    const weekStart = startOfWeekUTC(new Date());
+    const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    // Earnings: what the paseador actually keeps (their rate + estimated
+    // tip) from walks that finished this week — commission/tax are the
+    // platform's/authorities' share, not theirs (see confirm()'s total =
+    // rate + commission + tax + tipEstimate in BookingProcessManager).
+    const completed = await this.bookings.find({
+      where: {
+        providerId: account.accountId,
+        status: BookingStatus.Completed,
+        completedAt: Between(weekStart, weekEnd),
+      },
+      relations: ['priceBreakdown'],
+    });
+    const earningsAmount = completed.reduce(
+      (sum, b) => sum + (b.priceBreakdown ? b.priceBreakdown.rateAmount + b.priceBreakdown.tipEstimate : 0),
+      0,
+    );
+    const currency = completed[0]?.priceBreakdown?.currency ?? 'MXN';
+
+    // The week strip: how many walks land on each day, whether already
+    // completed or still upcoming — 'requested' is excluded since that's
+    // not a walk on the calendar yet, and 'cancelled'/'disputed' never were.
+    const scheduled = await this.bookings.find({
+      where: {
+        providerId: account.accountId,
+        status: In([BookingStatus.Confirmed, BookingStatus.InProgress, BookingStatus.Completed]),
+        scheduledAt: Between(weekStart, weekEnd),
+      },
+    });
+    const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+    const counts = new Array(7).fill(0) as number[];
+    for (const b of scheduled) {
+      const dayIndex = Math.floor((b.scheduledAt.getTime() - weekStart.getTime()) / (24 * 60 * 60 * 1000));
+      if (dayIndex >= 0 && dayIndex < 7) counts[dayIndex]++;
+    }
+
+    return {
+      data: {
+        weekStart: weekStart.toISOString(),
+        earnings: { amount: earningsAmount, currency },
+        completedThisWeek: completed.length,
+        days: DAY_LABELS.map((label, i) => ({ label, count: counts[i] })),
+      },
     };
   }
 
@@ -292,6 +350,17 @@ export class BookingController {
     });
     return { data: rows.map(toMessageResponse) };
   }
+}
+
+// Monday 00:00 UTC of the week containing `d` — every scheduledAt/
+// completedAt in this codebase is stored and compared in UTC (see
+// BookingProcessManager defaulting scheduledAt to `new Date()`), so the
+// week boundary follows the same convention rather than any one user's
+// local timezone.
+function startOfWeekUTC(d: Date): Date {
+  const day = d.getUTCDay(); // 0=Sun, 1=Mon, ... 6=Sat
+  const diffToMonday = day === 0 ? 6 : day - 1;
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - diffToMonday));
 }
 
 function toMessageResponse(message: BookingMessage) {
