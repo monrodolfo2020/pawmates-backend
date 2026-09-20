@@ -7,6 +7,7 @@ import { MeController } from './api/me.controller';
 import { PetsController } from './api/pets.controller';
 import { Account } from './domain/entities/account.entity';
 import { EmailVerificationCode } from './domain/entities/email-verification-code.entity';
+import { PasswordResetToken } from './domain/entities/password-reset-token.entity';
 import { Pet } from './domain/entities/pet.entity';
 import { ProviderVerification } from './domain/entities/provider-verification.entity';
 import { CatalogItem } from '../commerce/domain/entities/catalog-item.entity';
@@ -22,6 +23,7 @@ import { ProviderProfile } from '../providers/domain/entities/provider-profile.e
       Pet,
       ProviderVerification,
       EmailVerificationCode,
+      PasswordResetToken,
       // Read-only for AdminController's platform-wide oversight — Commerce
       // still owns writes to these via CommerceModule/CommerceProcessManager.
       // CatalogItem is the one exception: admin manages it directly (adding

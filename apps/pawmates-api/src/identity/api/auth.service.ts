@@ -4,6 +4,7 @@ import {
   ResourceNotFoundError,
   ValidationError,
   sendVerificationEmail,
+  sendPasswordResetEmail,
   uploadBase64Photo,
 } from '@pawmates/common';
 import { Injectable, Logger } from '@nestjs/common';
@@ -14,8 +15,15 @@ import { Repository } from 'typeorm';
 import { Account } from '../domain/entities/account.entity';
 import type { Role } from '../domain/entities/account.entity';
 import { EmailVerificationCode } from '../domain/entities/email-verification-code.entity';
+import { PasswordResetToken } from '../domain/entities/password-reset-token.entity';
 import { ProviderVerification } from '../domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
+
+// Where the emailed reset link points — the deployed frontend, not this
+// API (see EXPO_PUBLIC_API_URL's counterpart on that side). Defaults to
+// the actual production frontend so a deployment missing this env var
+// still sends a working link instead of a broken one.
+const APP_URL = process.env.APP_URL ?? 'https://pawmates-one.vercel.app';
 
 const SALT_ROUNDS = 10;
 
@@ -35,6 +43,8 @@ export class AuthService {
     private readonly verifications: Repository<ProviderVerification>,
     @InjectRepository(EmailVerificationCode)
     private readonly verificationCodes: Repository<EmailVerificationCode>,
+    @InjectRepository(PasswordResetToken)
+    private readonly passwordResetTokens: Repository<PasswordResetToken>,
     @InjectRepository(ProviderProfile)
     private readonly providerProfiles: Repository<ProviderProfile>,
     private readonly jwt: JwtService,
@@ -182,6 +192,56 @@ export class AuthService {
     await this.verificationCodes.save(record);
 
     account.markEmailVerified();
+    await this.accounts.save(account);
+  }
+
+  /** Always succeeds from the caller's perspective, whether or not the
+   * email is actually registered — revealing that would let anyone probe
+   * which emails have PawMates accounts. Silently no-ops when there's no
+   * match instead of throwing ResourceNotFoundError. */
+  async requestPasswordReset(email: string): Promise<void> {
+    const account = await this.accounts.findOne({
+      where: { email: email.toLowerCase() },
+    });
+    if (!account) return;
+
+    const existing = await this.passwordResetTokens.findOne({
+      where: { accountId: account.id },
+    });
+    const record = existing ?? PasswordResetToken.issue(account.id);
+    if (existing) {
+      // Overwrite in place — one active token per account (unique
+      // account_id), same reissue pattern as EmailVerificationCode.
+      const fresh = PasswordResetToken.issue(account.id);
+      record.token = fresh.token;
+      record.expiresAt = fresh.expiresAt;
+      record.consumedAt = null;
+    }
+    await this.passwordResetTokens.save(record);
+
+    const resetLink = `${APP_URL}/reset-password?token=${record.token}`;
+    try {
+      await sendPasswordResetEmail(account.email, resetLink);
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo enviar el correo de restablecimiento a ${account.email}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const record = await this.passwordResetTokens.findOne({ where: { token } });
+    if (!record) {
+      throw new ValidationError('Este enlace no es válido. Pide uno nuevo.');
+    }
+    record.assertValid();
+    record.consume();
+    await this.passwordResetTokens.save(record);
+
+    const account = await this.accounts.findOneOrFail({
+      where: { id: record.accountId },
+    });
+    account.setPasswordHash(await bcrypt.hash(newPassword, SALT_ROUNDS));
     await this.accounts.save(account);
   }
 

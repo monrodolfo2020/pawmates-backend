@@ -10,6 +10,7 @@ import * as bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service';
 import { Account } from '../domain/entities/account.entity';
 import { EmailVerificationCode } from '../domain/entities/email-verification-code.entity';
+import { PasswordResetToken } from '../domain/entities/password-reset-token.entity';
 import { ProviderVerification } from '../domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 
@@ -31,6 +32,9 @@ describe('AuthService', () => {
   >;
   let verificationCodes: jest.Mocked<
     Pick<Repository<EmailVerificationCode>, 'findOne' | 'save'>
+  >;
+  let passwordResetTokens: jest.Mocked<
+    Pick<Repository<PasswordResetToken>, 'findOne' | 'save'>
   >;
   let providerProfiles: jest.Mocked<Pick<Repository<ProviderProfile>, 'save'>>;
   let jwt: jest.Mocked<Pick<JwtService, 'signAsync'>>;
@@ -60,6 +64,10 @@ describe('AuthService', () => {
       findOne: jest.fn().mockResolvedValue(null),
       save: jest.fn((v) => Promise.resolve(v as EmailVerificationCode)),
     };
+    passwordResetTokens = {
+      findOne: jest.fn(),
+      save: jest.fn((v) => Promise.resolve(v as PasswordResetToken)),
+    };
     providerProfiles = {
       save: jest.fn((p) => Promise.resolve(p as ProviderProfile)),
     };
@@ -69,6 +77,7 @@ describe('AuthService', () => {
       accounts as unknown as Repository<Account>,
       verifications as unknown as Repository<ProviderVerification>,
       verificationCodes as unknown as Repository<EmailVerificationCode>,
+      passwordResetTokens as unknown as Repository<PasswordResetToken>,
       providerProfiles as unknown as Repository<ProviderProfile>,
       jwt as unknown as JwtService,
     );
@@ -313,6 +322,73 @@ describe('AuthService', () => {
       verificationCodes.findOne.mockResolvedValue(null);
 
       await expect(service.verifyEmail('acc-1', '123456')).rejects.toThrow(ValidationError);
+    });
+  });
+
+  describe('requestPasswordReset', () => {
+    it('issues a fresh token for a registered email', async () => {
+      const account = new Account();
+      account.id = 'acc-1';
+      account.email = 'owner@test.com';
+      accounts.findOne.mockResolvedValue(account);
+      passwordResetTokens.findOne.mockResolvedValue(null);
+
+      await service.requestPasswordReset('Owner@Test.com');
+
+      expect(accounts.findOne).toHaveBeenCalledWith({ where: { email: 'owner@test.com' } });
+      expect(passwordResetTokens.save).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId: 'acc-1', consumedAt: null }),
+      );
+    });
+
+    it('silently no-ops for an unregistered email — never reveals whether it exists', async () => {
+      accounts.findOne.mockResolvedValue(null);
+
+      await expect(service.requestPasswordReset('nobody@test.com')).resolves.toBeUndefined();
+      expect(passwordResetTokens.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('sets a new password hash when the token is valid', async () => {
+      const record = PasswordResetToken.issue('acc-1');
+      passwordResetTokens.findOne.mockResolvedValue(record);
+      const account = new Account();
+      account.id = 'acc-1';
+      account.passwordHash = 'old-hash';
+      accounts.findOneOrFail.mockResolvedValue(account);
+
+      await service.resetPassword(record.token, 'newPassword123');
+
+      expect(record.consumedAt).not.toBeNull();
+      expect(passwordResetTokens.save).toHaveBeenCalledWith(record);
+      expect(account.passwordHash).not.toBe('old-hash');
+      expect(await bcrypt.compare('newPassword123', account.passwordHash)).toBe(true);
+      expect(accounts.save).toHaveBeenCalledWith(account);
+    });
+
+    it('rejects an unknown token', async () => {
+      passwordResetTokens.findOne.mockResolvedValue(null);
+      await expect(service.resetPassword('bogus', 'newPassword123')).rejects.toThrow(ValidationError);
+      expect(accounts.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects an already-consumed token', async () => {
+      const record = PasswordResetToken.issue('acc-1');
+      record.consume();
+      passwordResetTokens.findOne.mockResolvedValue(record);
+
+      await expect(service.resetPassword(record.token, 'newPassword123')).rejects.toThrow(ValidationError);
+      expect(accounts.save).not.toHaveBeenCalled();
+    });
+
+    it('rejects an expired token', async () => {
+      const record = PasswordResetToken.issue('acc-1');
+      record.expiresAt = new Date(Date.now() - 1000);
+      passwordResetTokens.findOne.mockResolvedValue(record);
+
+      await expect(service.resetPassword(record.token, 'newPassword123')).rejects.toThrow(ValidationError);
+      expect(accounts.save).not.toHaveBeenCalled();
     });
   });
 });

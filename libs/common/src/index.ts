@@ -10,3 +10,4 @@ export * from './idempotency/idempotency-key.entity';
 export * from './idempotency/service-name.token';
 export * from './storage/blob-storage';
 export * from './email/send-verification-email';
+export * from './email/send-password-reset-email';

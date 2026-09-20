@@ -19,6 +19,7 @@ import { Product } from '../../commerce/domain/entities/product.entity';
 import { Storefront } from '../../commerce/domain/entities/storefront.entity';
 import { Account } from '../../identity/domain/entities/account.entity';
 import { EmailVerificationCode } from '../../identity/domain/entities/email-verification-code.entity';
+import { PasswordResetToken } from '../../identity/domain/entities/password-reset-token.entity';
 import { Pet } from '../../identity/domain/entities/pet.entity';
 import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
@@ -40,6 +41,7 @@ const pawmatesDataSource = new DataSource({
     Pet,
     ProviderVerification,
     EmailVerificationCode,
+    PasswordResetToken,
     ProviderProfile,
     Booking,
     BookingLine,

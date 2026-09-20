@@ -7,14 +7,16 @@ import type { AuthenticatedAccount } from '@pawmates/common';
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AddRoleDto } from './dto/add-role.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SignupDto } from './dto/signup.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 
 /**
  * Real email+password auth, replacing this MVP's original dev-login
  * shortcut. Email verification (see send-verification-email/verify-email
- * below) — no password reset yet (see README's Identity section).
+ * below) and password reset (forgot-password/reset-password).
  */
 @Controller('v1/auth')
 export class AuthController {
@@ -70,5 +72,22 @@ export class AuthController {
   ) {
     await this.auth.verifyEmail(account.accountId, dto.code);
     return { data: { verified: true } };
+  }
+
+  /** No guard — this is how a locked-out (logged-out) person starts the
+   * flow. Always reports success regardless of whether the email is
+   * registered (see AuthService.requestPasswordReset's comment). */
+  @Post('forgot-password')
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    await this.auth.requestPasswordReset(dto.email);
+    return { data: { sent: true } };
+  }
+
+  /** No guard — the reset token from the emailed link is the only
+   * credential here, not a session. */
+  @Post('reset-password')
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    await this.auth.resetPassword(dto.token, dto.newPassword);
+    return { data: { reset: true } };
   }
 }

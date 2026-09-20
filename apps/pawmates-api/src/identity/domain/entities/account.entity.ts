@@ -49,4 +49,8 @@ export class Account {
   markEmailVerified(): void {
     this.emailVerifiedAt = new Date();
   }
+
+  setPasswordHash(hash: string): void {
+    this.passwordHash = hash;
+  }
 }
