@@ -73,6 +73,17 @@ export class Booking {
   @UpdateDateColumn({ name: 'updated_at', type: 'datetime' })
   updatedAt!: Date;
 
+  // Chat read state (per-account, not per-device — see BookingController's
+  // sendMessage/listMessages, the only writers of these three columns).
+  @Column({ name: 'last_message_at', type: 'datetime', nullable: true })
+  lastMessageAt!: Date | null;
+
+  @Column({ name: 'owner_last_read_at', type: 'datetime', nullable: true })
+  ownerLastReadAt!: Date | null;
+
+  @Column({ name: 'provider_last_read_at', type: 'datetime', nullable: true })
+  providerLastReadAt!: Date | null;
+
   @OneToMany(() => BookingLine, (line) => line.booking, { cascade: true })
   lines!: BookingLine[];
 

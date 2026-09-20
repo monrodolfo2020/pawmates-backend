@@ -53,7 +53,8 @@ describe('NoDoubleBookingPolicy (integration)', () => {
           status text NOT NULL, recurrence_series_id text NULL, scheduled_at datetime NOT NULL,
           idempotency_key text NOT NULL, started_at datetime NULL, completed_at datetime NULL,
           created_at datetime NOT NULL DEFAULT (datetime('now')),
-          updated_at datetime NOT NULL DEFAULT (datetime('now'))
+          updated_at datetime NOT NULL DEFAULT (datetime('now')),
+          last_message_at datetime NULL, owner_last_read_at datetime NULL, provider_last_read_at datetime NULL
         )
       `);
       await dataSource.query(`

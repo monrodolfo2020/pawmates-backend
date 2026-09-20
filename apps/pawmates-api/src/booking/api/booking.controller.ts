@@ -133,7 +133,7 @@ export class BookingController {
 
     const enrichment = await this.loadEnrichment(rows);
     return {
-      data: rows.map((b) => toBookingResponse(b, enrichment)),
+      data: rows.map((b) => toBookingResponse(b, enrichment, account.accountId)),
       meta: { cursor: nextCursor },
     };
   }
@@ -328,6 +328,14 @@ export class BookingController {
       text: dto.text,
     });
     await this.messages.save(message);
+
+    // Bumps last_message_at for the "unread" badge on the other side, and
+    // counts sending as reading your own message so it never flags itself.
+    const booking = await this.bookings.findOneOrFail({ where: { id } });
+    booking.lastMessageAt = message.sentAt;
+    this.markReadFor(booking, account.accountId, message.sentAt);
+    await this.bookings.save(booking);
+
     return { data: toMessageResponse(message) };
   }
 
@@ -348,7 +356,29 @@ export class BookingController {
       where: { bookingId: id },
       order: { sentAt: 'ASC' },
     });
+
+    // Fetching the thread is what "reading" it means here — no separate
+    // ack call (mirrors the polled, no-WebSocket design noted above).
+    if (this.markReadFor(booking, account.accountId, new Date())) {
+      await this.bookings.save(booking);
+    }
+
     return { data: rows.map(toMessageResponse) };
+  }
+
+  /** Stamps whichever side of the booking `accountId` is with `at`, and
+   * reports whether it actually matched one (an admin browsing someone
+   * else's thread shouldn't silently claim either side's read state). */
+  private markReadFor(booking: Booking, accountId: string, at: Date): boolean {
+    if (accountId === booking.ownerId) {
+      booking.ownerLastReadAt = at;
+      return true;
+    }
+    if (accountId === booking.providerId) {
+      booking.providerLastReadAt = at;
+      return true;
+    }
+    return false;
   }
 }
 
@@ -376,7 +406,19 @@ function toMessageResponse(message: BookingMessage) {
 function toBookingResponse(
   booking: Booking,
   enrichment?: { petNames: Map<string, string>; ownerNames: Map<string, string | null> },
+  viewerAccountId?: string,
 ) {
+  const viewerLastReadAt =
+    viewerAccountId === booking.ownerId
+      ? booking.ownerLastReadAt
+      : viewerAccountId === booking.providerId
+        ? booking.providerLastReadAt
+        : null;
+  const hasUnreadMessages =
+    viewerAccountId != null &&
+    booking.lastMessageAt != null &&
+    (viewerLastReadAt == null || booking.lastMessageAt > viewerLastReadAt);
+
   return {
     id: booking.id,
     ownerId: booking.ownerId,
@@ -384,6 +426,7 @@ function toBookingResponse(
     providerId: booking.providerId,
     status: booking.status,
     scheduledAt: booking.scheduledAt,
+    hasUnreadMessages,
     lines: (booking.lines ?? []).map((line) => ({
       ...line,
       petName: enrichment?.petNames.get(line.petId) ?? null,
