@@ -30,6 +30,13 @@ import type {
 } from './commands';
 import { longestDurationMinutes } from './duration';
 
+// A fixed placeholder UUID (matching the DEMO_* ones the frontend already
+// uses for providerServiceId/addressId — see api/client.ts), not a real
+// catalog entry: any booking line tagged with this code is treated as a
+// free Meet & Greet request rather than a paid walk. Must stay in sync
+// with MEET_GREET_SERVICE_TYPE_CODE in the frontend's api/client.ts.
+export const MEET_GREET_SERVICE_TYPE_CODE = '00000000-0000-4000-8000-0000000000c1';
+
 /**
  * BookingProcessManager — the saga orchestrator (Architecture doc ADR-05).
  * Owns the full CreateBooking flow diagrammed in Architecture §11: two
@@ -112,16 +119,24 @@ export class BookingProcessManager {
       recurrenceSeriesId: cmd.recurrenceSeriesId,
     });
 
-    const tipEstimate = availability.rate.multiply(0.15);
-    const total = availability.rate
-      .add(availability.commission)
-      .add(availability.tax)
-      .add(tipEstimate);
+    // A Meet & Greet (see MEET_GREET_SERVICE_TYPE_CODE) is a free, no-
+    // obligation intro session, not a paid walk — same real request/
+    // accept pipeline as a normal booking, just $0 regardless of the
+    // paseador's rate.
+    const isMeetGreet = cmd.lines.some(
+      (line) => line.serviceTypeCode === MEET_GREET_SERVICE_TYPE_CODE,
+    );
+    const zero = Money.zero(availability.rate.currency);
+    const rate = isMeetGreet ? zero : availability.rate;
+    const commission = isMeetGreet ? zero : availability.commission;
+    const tax = isMeetGreet ? zero : availability.tax;
+    const tipEstimate = isMeetGreet ? zero : availability.rate.multiply(0.15);
+    const total = isMeetGreet ? zero : rate.add(commission).add(tax).add(tipEstimate);
     const priceBreakdown = PriceBreakdown.create({
       bookingId: booking.id,
-      rate: availability.rate,
-      commission: availability.commission,
-      tax: availability.tax,
+      rate,
+      commission,
+      tax,
       tipEstimate,
       total,
     });

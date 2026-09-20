@@ -12,7 +12,10 @@ import type { MarketplacePort } from '../ports/marketplace.port';
 import type { PaymentsPort } from '../ports/payments.port';
 import type { TrustSafetyPort } from '../ports/trust-safety.port';
 import { NoDoubleBookingPolicy } from '../policies/no-double-booking.policy';
-import { BookingProcessManager } from './booking-process-manager';
+import {
+  BookingProcessManager,
+  MEET_GREET_SERVICE_TYPE_CODE,
+} from './booking-process-manager';
 import { BookingStatus } from '../value-objects/booking-status';
 
 describe('BookingProcessManager', () => {
@@ -118,6 +121,27 @@ describe('BookingProcessManager', () => {
         OutboxEvent,
         expect.objectContaining({ eventType: 'BookingCreated' }),
       );
+      expect(booking.priceBreakdown.rateAmount).toBe(5000);
+      expect(booking.priceBreakdown.totalAmount).toBeGreaterThan(0);
+    });
+
+    it('prices a Meet & Greet line at zero regardless of the provider\'s rate', async () => {
+      bookingsRepo.findOne.mockResolvedValue(null);
+
+      const booking = await manager.createBooking(
+        {
+          ...cmd,
+          lines: [{ ...cmd.lines[0], serviceTypeCode: MEET_GREET_SERVICE_TYPE_CODE }],
+        },
+        'trace-1',
+      );
+
+      expect(booking.priceBreakdown.rateAmount).toBe(0);
+      expect(booking.priceBreakdown.commissionAmount).toBe(0);
+      expect(booking.priceBreakdown.taxAmount).toBe(0);
+      expect(booking.priceBreakdown.tipEstimate).toBe(0);
+      expect(booking.priceBreakdown.totalAmount).toBe(0);
+      expect(booking.priceBreakdown.currency).toBe('USD');
     });
 
     it('is idempotent: replays the same Booking on a repeated idempotency key', async () => {
