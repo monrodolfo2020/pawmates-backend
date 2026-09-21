@@ -28,7 +28,14 @@ export class SimulatedBillingAdapter implements BillingPort {
 
   createCheckout(request: CheckoutRequest): Promise<CheckoutSession> {
     const reference = `sim_${ulid().toLowerCase()}`;
-    const url = `${request.returnUrl}?ref=${encodeURIComponent(reference)}&sim=1`;
+    // Stands where the gateway's hosted payment page would: a backend
+    // endpoint that "settles" the payment and bounces the business back
+    // into the app, so the frontend opens a URL and comes back exactly
+    // as it will with a real gateway, and carries no simulation code.
+    const api = process.env.API_URL?.replace(/\/$/, '') ?? '';
+    const url =
+      `${api}/v1/billing/simulate/${encodeURIComponent(reference)}` +
+      `?return=${encodeURIComponent(request.returnUrl)}`;
     return Promise.resolve({ reference, url });
   }
 

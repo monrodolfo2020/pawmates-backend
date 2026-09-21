@@ -11,7 +11,10 @@ import {
   Get,
   Headers,
   Inject,
+  Param,
   Post,
+  Query,
+  Redirect,
   UseGuards,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -159,11 +162,19 @@ export class BillingController {
   ) {
     const reference = await this.billing.verifyCallback(payload, headers);
     if (!reference) return { data: { applied: false } };
+    return { data: await this.settle(reference) };
+  }
 
+  /** Marks one pending activation paid and extends the plan. Safe to
+   * call twice with the same reference — the second call finds it
+   * already active and changes nothing. */
+  private async settle(
+    reference: string,
+  ): Promise<{ applied: boolean; expiresAt?: Date | null }> {
     const activation = await this.activations.findOne({ where: { reference } });
-    if (!activation) return { data: { applied: false } };
+    if (!activation) return { applied: false };
     if (activation.status === 'active') {
-      return { data: { applied: true, expiresAt: activation.expiresAt } };
+      return { applied: true, expiresAt: activation.expiresAt };
     }
 
     const profile = await this.requireProfile(activation.accountId);
@@ -172,7 +183,26 @@ export class BillingController {
     await this.profiles.save(profile);
     await this.activations.save(activation);
 
-    return { data: { applied: true, expiresAt } };
+    return { applied: true, expiresAt };
+  }
+
+  /**
+   * Stands in for a gateway's hosted payment page: settles the checkout
+   * and bounces the business back into the app. Exists only while
+   * BILLING_PROVIDER=simulation — with no gateway configured a checkout
+   * can't be opened in the first place, so there's nothing to settle.
+   */
+  @Get('simulate/:reference')
+  @Redirect()
+  async simulate(
+    @Param('reference') reference: string,
+    @Query('return') returnUrl?: string,
+  ) {
+    if (!this.billing.online || this.billing.name !== 'simulation') {
+      throw new ValidationError('No hay un pago simulado en curso.');
+    }
+    await this.settle(reference);
+    return { url: returnUrl ?? APP_URL, statusCode: 302 };
   }
 
   /**
