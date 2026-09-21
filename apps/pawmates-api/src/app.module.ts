@@ -31,6 +31,8 @@ import { ProviderVerification } from './identity/domain/entities/provider-verifi
 import { libsqlConnectionOptions } from './infra/persistence/libsql-connection';
 import { ProvidersModule } from './providers/providers.module';
 import { ProviderProfile } from './providers/domain/entities/provider-profile.entity';
+import { PlanActivationCode } from './providers/domain/entities/plan-activation-code.entity';
+import { ProviderPlanActivation } from './providers/domain/entities/provider-plan-activation.entity';
 import { TripsController } from './trips/trips.controller';
 
 /**
@@ -56,6 +58,8 @@ import { TripsController } from './trips/trips.controller';
         EmailVerificationCode,
         PasswordResetToken,
         ProviderProfile,
+        ProviderPlanActivation,
+        PlanActivationCode,
         Booking,
         BookingLine,
         CancellationRecord,

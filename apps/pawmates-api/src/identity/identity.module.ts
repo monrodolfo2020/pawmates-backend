@@ -15,6 +15,7 @@ import { Order } from '../commerce/domain/entities/order.entity';
 import { Product } from '../commerce/domain/entities/product.entity';
 import { Storefront } from '../commerce/domain/entities/storefront.entity';
 import { ProviderProfile } from '../providers/domain/entities/provider-profile.entity';
+import { PlanActivationCode } from '../providers/domain/entities/plan-activation-code.entity';
 
 @Module({
   imports: [
@@ -38,6 +39,10 @@ import { ProviderProfile } from '../providers/domain/entities/provider-profile.e
       // AuthService.seedInitialProfilePhoto) — ProvidersModule still owns
       // every other write to it via ProvidersController.
       ProviderProfile,
+      // Written by AdminController alone — issuing a VIP activation code
+      // is an admin action, while redeeming one belongs to the business
+      // and lives in ProvidersModule's BillingController.
+      PlanActivationCode,
     ]),
   ],
   controllers: [AuthController, MeController, PetsController, AdminController],

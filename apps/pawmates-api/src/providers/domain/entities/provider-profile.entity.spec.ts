@@ -214,6 +214,91 @@ describe('ProviderProfile aggregate', () => {
     });
   });
 
+  describe('paid VIP and expiry', () => {
+    const march = new Date('2026-03-10T12:00:00Z');
+
+    it('activates VIP for one period and reports when it runs out', () => {
+      const profile = ProviderProfile.draft('account-1');
+      const until = profile.activateVip('monthly', march);
+
+      expect(profile.plan).toBe('vip');
+      expect(until.toISOString()).toBe('2026-04-10T12:00:00.000Z');
+      expect(profile.isVip(march)).toBe(true);
+    });
+
+    it('stops being VIP once the period is over, without changing the plan', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.activateVip('monthly', march);
+
+      const afterExpiry = new Date('2026-05-01T00:00:00Z');
+      expect(profile.isVip(afterExpiry)).toBe(false);
+      // The stored plan is untouched, so renewing restores the same page.
+      expect(profile.plan).toBe('vip');
+    });
+
+    it('serves the default design once VIP lapses, and the custom one again on renewal', () => {
+      // saveDesignDraft/effectiveDesign read the clock themselves, so this
+      // one has to travel rather than pass a date in.
+      jest.useFakeTimers().setSystemTime(march);
+      try {
+        const profile = ProviderProfile.draft('account-1');
+        profile.activateVip('monthly');
+        profile.saveDesignDraft({ template: 'minimal' });
+        profile.publishDesign();
+        expect(profile.effectiveDesign.template).toBe('minimal');
+
+        jest.setSystemTime(new Date('2026-06-01T00:00:00Z')); // VIP ran out Apr 10
+        expect(profile.effectiveDesign).toEqual(DEFAULT_PAGE_DESIGN);
+        expect(() => profile.saveDesignDraft({ template: 'gallery' })).toThrow(ValidationError);
+
+        profile.activateVip('monthly');
+        expect(profile.effectiveDesign.template).toBe('minimal');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('stacks an early renewal onto the time left instead of discarding it', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.activateVip('monthly', march); // runs to Apr 10
+
+      const renewedOn = new Date('2026-03-30T12:00:00Z'); // 11 days early
+      const until = profile.activateVip('monthly', renewedOn);
+      expect(until.toISOString()).toBe('2026-05-10T12:00:00.000Z');
+    });
+
+    it('starts a lapsed plan over from today rather than backdating it', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.activateVip('monthly', march); // ran out Apr 10
+
+      const renewedOn = new Date('2026-08-01T00:00:00Z');
+      const until = profile.activateVip('monthly', renewedOn);
+      expect(until.toISOString()).toBe('2026-09-01T00:00:00.000Z');
+    });
+
+    it('treats an admin-granted VIP as never expiring', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.setPlan('vip');
+
+      expect(profile.planExpiresAt).toBeNull();
+      expect(profile.isVip(new Date('2099-01-01T00:00:00Z'))).toBe(true);
+    });
+
+    it('clears the expiry when an admin drops the business to free', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.activateVip('annual', march);
+      profile.setPlan('free');
+
+      expect(profile.planExpiresAt).toBeNull();
+      expect(profile.isVip(march)).toBe(false);
+    });
+
+    it('rejects an unknown billing period', () => {
+      const profile = ProviderProfile.draft('account-1');
+      expect(() => profile.activateVip('quincenal')).toThrow(ValidationError);
+    });
+  });
+
   it('accepts the public plans/spots fields', () => {
     const profile = ProviderProfile.draft('account-1');
     profile.update({

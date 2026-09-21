@@ -23,6 +23,8 @@ import { PasswordResetToken } from '../../identity/domain/entities/password-rese
 import { Pet } from '../../identity/domain/entities/pet.entity';
 import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
+import { PlanActivationCode } from '../../providers/domain/entities/plan-activation-code.entity';
+import { ProviderPlanActivation } from '../../providers/domain/entities/provider-plan-activation.entity';
 import { libsqlConnectionOptions } from './libsql-connection';
 
 /**
@@ -43,6 +45,8 @@ const pawmatesDataSource = new DataSource({
     EmailVerificationCode,
     PasswordResetToken,
     ProviderProfile,
+    ProviderPlanActivation,
+    PlanActivationCode,
     Booking,
     BookingLine,
     CancellationRecord,

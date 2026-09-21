@@ -7,7 +7,7 @@ import {
   uploadBase64Photo,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Account } from '../domain/entities/account.entity';
@@ -19,6 +19,8 @@ import { Storefront } from '../../commerce/domain/entities/storefront.entity';
 import { UpdateCatalogItemDto } from '../../commerce/api/dto/update-catalog-item.dto';
 import { UpdateProviderVerificationDto } from './dto/update-provider-verification.dto';
 import { UpdateBusinessPlanDto } from './dto/update-business-plan.dto';
+import { CreatePlanCodeDto } from '../../providers/api/dto/create-plan-code.dto';
+import { PlanActivationCode } from '../../providers/domain/entities/plan-activation-code.entity';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 
 function assertAdmin(account: AuthenticatedAccount): void {
@@ -50,6 +52,8 @@ export class AdminController {
     private readonly catalogItems: Repository<CatalogItem>,
     @InjectRepository(ProviderProfile)
     private readonly providerProfiles: Repository<ProviderProfile>,
+    @InjectRepository(PlanActivationCode)
+    private readonly planCodes: Repository<PlanActivationCode>,
   ) {}
 
   @Get('accounts')
@@ -149,6 +153,8 @@ export class AdminController {
         category: p.category,
         slug: p.slug,
         plan: p.plan,
+        isVip: p.isVip(),
+        planExpiresAt: p.planExpiresAt,
         isPublished: p.isPublished,
         createdAt: p.createdAt,
       })),
@@ -177,6 +183,57 @@ export class AdminController {
     profile.setPlan(dto.plan);
     await this.providerProfiles.save(profile);
     return { data: { accountId: profile.accountId, plan: profile.plan } };
+  }
+
+  /** The activation codes an admin has issued, newest first. */
+  @Get('plan-codes')
+  async listPlanCodes(@CurrentAccount() account: AuthenticatedAccount) {
+    assertAdmin(account);
+    const rows = await this.planCodes.find({ order: { createdAt: 'DESC' }, take: 100 });
+    return {
+      data: rows.map((c) => ({
+        code: c.code,
+        period: c.period,
+        note: c.note,
+        maxUses: c.maxUses,
+        usedCount: c.usedCount,
+        isSpent: c.isSpent,
+        expiresAt: c.expiresAt,
+        createdAt: c.createdAt,
+      })),
+    };
+  }
+
+  /**
+   * Issues a code that puts one business on VIP for a period (see
+   * PlanActivationCode). This is how a business that paid by transfer
+   * gets its plan without an admin having to flip a switch per customer
+   * — and unlike that switch, it leaves a record of what was paid for.
+   */
+  @Post('plan-codes')
+  async createPlanCode(
+    @Body() dto: CreatePlanCodeDto,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    assertAdmin(account);
+    const code = PlanActivationCode.generate({
+      period: dto.period,
+      note: dto.note ?? null,
+      maxUses: dto.maxUses ?? 1,
+    });
+    await this.planCodes.save(code);
+    return {
+      data: {
+        code: code.code,
+        period: code.period,
+        note: code.note,
+        maxUses: code.maxUses,
+        usedCount: code.usedCount,
+        isSpent: code.isSpent,
+        expiresAt: code.expiresAt,
+        createdAt: code.createdAt,
+      },
+    };
   }
 
   /** Platform-wide storefront oversight — Commerce's own controllers only

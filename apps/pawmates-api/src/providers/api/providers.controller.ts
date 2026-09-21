@@ -284,7 +284,9 @@ function toDetailResponse(profile: ProviderProfile, account: Account | null, ide
     price: profile.price,
     plansOffered: profile.plansOffered,
     walkingSpots: profile.walkingSpots,
-    plan: profile.plan,
+    // A lapsed VIP is a free page, and says so — `plan` here is what's
+    // in force, not what's stored (see ProviderProfile.isVip).
+    plan: profile.isVip() ? 'vip' : 'free',
     design: profile.effectiveDesign,
     emailVerified: account?.emailVerifiedAt != null,
     identityVerified,
@@ -316,6 +318,8 @@ function toOwnResponse(profile: ProviderProfile) {
     phone: profile.phone,
     isPublished: profile.isPublished,
     plan: profile.plan,
+    isVip: profile.isVip(),
+    planExpiresAt: profile.planExpiresAt,
     design: profile.draftDesign,
     publishedDesign: profile.designPublished,
     hasUnpublishedDesign: profile.hasUnpublishedDesign,

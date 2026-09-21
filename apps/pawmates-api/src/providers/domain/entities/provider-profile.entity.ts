@@ -19,6 +19,8 @@ import {
   DEFAULT_BUSINESS_PLAN,
 } from '../value-objects/business-plan';
 import type { BusinessPlan } from '../value-objects/business-plan';
+import { assertBillingPeriod, periodEnd } from '../value-objects/billing';
+import type { BillingPeriod } from '../value-objects/billing';
 import { DEFAULT_PAGE_DESIGN, parsePageDesign } from '../value-objects/page-design';
 import type { PageDesign } from '../value-objects/page-design';
 
@@ -184,6 +186,12 @@ export class ProviderProfile {
   @Column({ type: 'text', default: DEFAULT_BUSINESS_PLAN })
   plan!: BusinessPlan;
 
+  /** When a paid VIP runs out. null means "doesn't run out": the free
+   * plan, and also a VIP an admin granted by hand, which is a courtesy
+   * with no billing period behind it (see setPlan). */
+  @Column({ name: 'plan_expires_at', type: 'datetime', nullable: true })
+  planExpiresAt!: Date | null;
+
   /** What the business is editing right now. Only reaches the public
    * page once publishDesign() copies it across — the point of the
    * "Diseño" / "En línea" split. */
@@ -221,8 +229,19 @@ export class ProviderProfile {
    * custom one on VIP — downgrading has to take the customization away,
    * not silently keep serving it.
    */
+  /**
+   * Whether VIP is actually in force right now. Everything that VIP
+   * unlocks asks this, never `plan === 'vip'` — a lapsed subscription
+   * leaves `plan` alone (so the business keeps its design and a renewal
+   * restores it untouched) and simply stops counting.
+   */
+  isVip(now: Date = new Date()): boolean {
+    if (this.plan !== 'vip') return false;
+    return this.planExpiresAt === null || this.planExpiresAt.getTime() > now.getTime();
+  }
+
   get effectiveDesign(): PageDesign {
-    if (this.plan !== 'vip') return DEFAULT_PAGE_DESIGN;
+    if (!this.isVip()) return DEFAULT_PAGE_DESIGN;
     return this.designPublished ?? DEFAULT_PAGE_DESIGN;
   }
 
@@ -231,11 +250,32 @@ export class ProviderProfile {
     return JSON.stringify(this.designDraft) !== JSON.stringify(this.designPublished);
   }
 
+  /** The admin panel's manual switch. A hand-granted VIP never expires
+   * (there's no period behind it), and dropping to free clears the
+   * expiry so a later paid activation starts from a clean slate. */
   setPlan(plan: string): void {
     if (!BUSINESS_PLANS.includes(plan as BusinessPlan)) {
       throw new ValidationError('Ese plan no existe.');
     }
     this.plan = plan as BusinessPlan;
+    this.planExpiresAt = null;
+  }
+
+  /**
+   * Turns on (or renews) a paid VIP. Renewing early stacks onto whatever
+   * is left rather than throwing it away — paying again on day 20 of a
+   * month has to give you 30 more days, not 10 fewer. A lapsed plan
+   * starts over from today instead of backdating to the old expiry.
+   */
+  activateVip(period: string, now: Date = new Date()): Date {
+    assertBillingPeriod(period);
+    const startFrom =
+      this.planExpiresAt && this.planExpiresAt.getTime() > now.getTime()
+        ? this.planExpiresAt
+        : now;
+    this.plan = 'vip';
+    this.planExpiresAt = periodEnd(startFrom, period as BillingPeriod);
+    return this.planExpiresAt;
   }
 
   /** Validates and stores what the business is editing — never touches
@@ -252,7 +292,7 @@ export class ProviderProfile {
   }
 
   private assertVip(): void {
-    if (this.plan !== 'vip') {
+    if (!this.isVip()) {
       throw new ValidationError('Personalizar tu página requiere el plan VIP.');
     }
   }
@@ -282,6 +322,7 @@ export class ProviderProfile {
     profile.phone = null;
     profile.isPublished = false;
     profile.plan = DEFAULT_BUSINESS_PLAN;
+    profile.planExpiresAt = null;
     profile.designDraft = null;
     profile.designPublished = null;
     return profile;
