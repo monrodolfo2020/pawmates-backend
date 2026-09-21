@@ -1,5 +1,6 @@
 import { Money, ValidationError } from '@pawmates/common';
 import { ProviderProfile } from './provider-profile.entity';
+import { DEFAULT_PAGE_DESIGN, PAGE_SECTIONS } from '../value-objects/page-design';
 
 describe('ProviderProfile aggregate', () => {
   it('starts as an unpublished draft with a generated id', () => {
@@ -131,6 +132,86 @@ describe('ProviderProfile aggregate', () => {
     const profile = ProviderProfile.draft('account-1');
     expect(() => profile.update({ age: 17 })).toThrow(ValidationError);
     expect(() => profile.update({ age: 91 })).toThrow(ValidationError);
+  });
+
+  describe('plan and page design', () => {
+    it('starts on the free plan with PawMates\' own design', () => {
+      const profile = ProviderProfile.draft('account-1');
+      expect(profile.plan).toBe('free');
+      expect(profile.effectiveDesign).toEqual(DEFAULT_PAGE_DESIGN);
+      expect(profile.hasUnpublishedDesign).toBe(false);
+    });
+
+    it('refuses to customize the page on the free plan', () => {
+      const profile = ProviderProfile.draft('account-1');
+      expect(() => profile.saveDesignDraft({ template: 'gallery' })).toThrow(ValidationError);
+      expect(() => profile.publishDesign()).toThrow(ValidationError);
+    });
+
+    it('keeps a VIP draft off the live page until it is published', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.setPlan('vip');
+
+      profile.saveDesignDraft({ template: 'gallery', primaryColor: '#123456' });
+      expect(profile.draftDesign.template).toBe('gallery');
+      expect(profile.hasUnpublishedDesign).toBe(true);
+      expect(profile.effectiveDesign).toEqual(DEFAULT_PAGE_DESIGN); // still the default live
+
+      profile.publishDesign();
+      expect(profile.effectiveDesign.template).toBe('gallery');
+      expect(profile.effectiveDesign.primaryColor).toBe('#123456');
+      expect(profile.hasUnpublishedDesign).toBe(false);
+    });
+
+    it('stops serving a custom design after a downgrade, without losing it', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.setPlan('vip');
+      profile.saveDesignDraft({ template: 'minimal' });
+      profile.publishDesign();
+
+      profile.setPlan('free');
+      expect(profile.effectiveDesign).toEqual(DEFAULT_PAGE_DESIGN);
+
+      profile.setPlan('vip');
+      expect(profile.effectiveDesign.template).toBe('minimal');
+    });
+
+    it('rejects an unknown plan', () => {
+      const profile = ProviderProfile.draft('account-1');
+      expect(() => profile.setPlan('platino')).toThrow(ValidationError);
+    });
+
+    it('rejects an invalid template, font or color', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.setPlan('vip');
+      expect(() => profile.saveDesignDraft({ template: 'neon' })).toThrow(ValidationError);
+      expect(() => profile.saveDesignDraft({ font: 'comic' })).toThrow(ValidationError);
+      expect(() => profile.saveDesignDraft({ primaryColor: 'rojo' })).toThrow(ValidationError);
+    });
+
+    it('fills in sections the client left out instead of dropping them', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.setPlan('vip');
+      profile.saveDesignDraft({ sections: [{ id: 'gallery', enabled: false }] });
+
+      const ids = profile.draftDesign.sections.map((s) => s.id);
+      expect(ids[0]).toBe('gallery'); // the order the client sent wins
+      expect(new Set(ids)).toEqual(new Set(PAGE_SECTIONS));
+      expect(profile.draftDesign.sections.find((s) => s.id === 'gallery')?.enabled).toBe(false);
+      expect(profile.draftDesign.sections.find((s) => s.id === 'hours')?.enabled).toBe(true);
+    });
+
+    it('caps testimonials and requires text on each', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.setPlan('vip');
+      profile.saveDesignDraft({ testimonials: [{ text: 'Excelente trato', author: 'Ana' }] });
+      expect(profile.draftDesign.testimonials).toEqual([{ text: 'Excelente trato', author: 'Ana' }]);
+
+      expect(() => profile.saveDesignDraft({ testimonials: [{ author: 'Ana' }] })).toThrow(ValidationError);
+      expect(() =>
+        profile.saveDesignDraft({ testimonials: new Array(7).fill({ text: 'x', author: 'y' }) }),
+      ).toThrow(ValidationError);
+    });
   });
 
   it('accepts the public plans/spots fields', () => {

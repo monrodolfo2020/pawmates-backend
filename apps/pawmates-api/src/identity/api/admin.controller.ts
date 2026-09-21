@@ -18,6 +18,7 @@ import { Product } from '../../commerce/domain/entities/product.entity';
 import { Storefront } from '../../commerce/domain/entities/storefront.entity';
 import { UpdateCatalogItemDto } from '../../commerce/api/dto/update-catalog-item.dto';
 import { UpdateProviderVerificationDto } from './dto/update-provider-verification.dto';
+import { UpdateBusinessPlanDto } from './dto/update-business-plan.dto';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 
 function assertAdmin(account: AuthenticatedAccount): void {
@@ -128,6 +129,54 @@ export class AdminController {
         createdAt: verification.createdAt,
       },
     };
+  }
+
+  /** Every registered business with its plan — the list behind the admin
+   * panel's "Negocios" tab. */
+  @Get('businesses')
+  async listBusinesses(@CurrentAccount() account: AuthenticatedAccount) {
+    assertAdmin(account);
+    const rows = await this.providerProfiles.find({ order: { createdAt: 'DESC' } });
+    const accounts = await this.accounts.find({
+      where: { id: In(rows.map((r) => r.accountId)) },
+    });
+    const accountById = new Map(accounts.map((a) => [a.id, a]));
+    return {
+      data: rows.map((p) => ({
+        accountId: p.accountId,
+        name: p.businessName ?? accountById.get(p.accountId)?.name ?? null,
+        email: accountById.get(p.accountId)?.email ?? null,
+        category: p.category,
+        slug: p.slug,
+        plan: p.plan,
+        isPublished: p.isPublished,
+        createdAt: p.createdAt,
+      })),
+    };
+  }
+
+  /**
+   * Turns VIP on or off for one business. There's no payment flow yet —
+   * the charge happens outside the app and an admin reflects it here
+   * (see business-plan.ts). Downgrading leaves the business's saved
+   * design untouched but stops serving it (see
+   * ProviderProfile.effectiveDesign), so re-upgrading restores the page
+   * exactly as it was.
+   */
+  @Patch('businesses/:accountId/plan')
+  async updateBusinessPlan(
+    @Param('accountId') accountId: string,
+    @Body() dto: UpdateBusinessPlanDto,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    assertAdmin(account);
+    const profile = await this.providerProfiles.findOne({ where: { accountId } });
+    if (!profile) {
+      throw new ResourceNotFoundError(`El negocio ${accountId} no existe.`);
+    }
+    profile.setPlan(dto.plan);
+    await this.providerProfiles.save(profile);
+    return { data: { accountId: profile.accountId, plan: profile.plan } };
   }
 
   /** Platform-wide storefront oversight — Commerce's own controllers only

@@ -8,7 +8,7 @@ import {
   uploadBase64Photo,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
-import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
 import { Account } from '../../identity/domain/entities/account.entity';
@@ -125,9 +125,40 @@ export class ProvidersController {
       age: dto.age === undefined ? undefined : dto.age,
       phone: dto.phone === undefined ? undefined : dto.phone === '' ? null : dto.phone,
     });
+    if (dto.design !== undefined) {
+      profile.saveDesignDraft(await this.uploadDesignPhotos(dto.design));
+    }
     profile.slug = await this.resolveSlug(profile);
     await this.profiles.save(profile);
     return { data: toOwnResponse(profile) };
+  }
+
+  /** Copies the draft onto the live page — the "Publicar cambios" button
+   * behind the Diseño / En línea split. */
+  @Post('me/design/publish')
+  @UseGuards(JwtAuthGuard)
+  async publishDesign(@CurrentAccount() account: AuthenticatedAccount) {
+    assertProvider(account);
+    const profile = await this.profiles.findOne({ where: { accountId: account.accountId } });
+    if (!profile) {
+      throw new ResourceNotFoundError('Todavía no tienes una página que publicar.');
+    }
+    profile.publishDesign();
+    await this.profiles.save(profile);
+    return { data: toOwnResponse(profile) };
+  }
+
+  /** The design's logo/cover arrive as data URLs the first time and as
+   * already-hosted URLs on every later save — same split as the gallery
+   * above. */
+  private async uploadDesignPhotos(
+    design: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const upload = async (value: unknown) =>
+      typeof value === 'string' && isDataUrl(value)
+        ? await uploadBase64Photo(value, 'providers')
+        : value;
+    return { ...design, logo: await upload(design.logo), cover: await upload(design.cover) };
   }
 
   /**
@@ -253,6 +284,8 @@ function toDetailResponse(profile: ProviderProfile, account: Account | null, ide
     price: profile.price,
     plansOffered: profile.plansOffered,
     walkingSpots: profile.walkingSpots,
+    plan: profile.plan,
+    design: profile.effectiveDesign,
     emailVerified: account?.emailVerifiedAt != null,
     identityVerified,
   };
@@ -282,5 +315,9 @@ function toOwnResponse(profile: ProviderProfile) {
     age: profile.age,
     phone: profile.phone,
     isPublished: profile.isPublished,
+    plan: profile.plan,
+    design: profile.draftDesign,
+    publishedDesign: profile.designPublished,
+    hasUnpublishedDesign: profile.hasUnpublishedDesign,
   };
 }

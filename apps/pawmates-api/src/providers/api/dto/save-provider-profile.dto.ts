@@ -2,6 +2,7 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   Min,
@@ -35,6 +36,14 @@ export class SaveProviderProfileDto {
   @IsString({ each: true })
   @IsOptional()
   photos?: string[];
+
+  /** VIP only — the micro-page design being drafted. Shape-checked by
+   * parsePageDesign (page-design.ts) rather than class-validator, since
+   * it needs normalizing (missing sections, defaults) as much as
+   * validating. */
+  @IsObject()
+  @IsOptional()
+  design?: Record<string, unknown>;
 
   @IsString()
   @IsOptional()

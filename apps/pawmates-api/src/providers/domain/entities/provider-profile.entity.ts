@@ -14,6 +14,13 @@ import {
   requiresRate,
 } from '../value-objects/service-category';
 import type { ServiceCategory } from '../value-objects/service-category';
+import {
+  BUSINESS_PLANS,
+  DEFAULT_BUSINESS_PLAN,
+} from '../value-objects/business-plan';
+import type { BusinessPlan } from '../value-objects/business-plan';
+import { DEFAULT_PAGE_DESIGN, parsePageDesign } from '../value-objects/page-design';
+import type { PageDesign } from '../value-objects/page-design';
 
 const MAX_BIO_LENGTH = 600;
 const MAX_SHORT_FIELD_LENGTH = 120;
@@ -174,6 +181,18 @@ export class ProviderProfile {
   @Column({ name: 'is_published', type: 'boolean', default: false })
   isPublished!: boolean;
 
+  @Column({ type: 'text', default: DEFAULT_BUSINESS_PLAN })
+  plan!: BusinessPlan;
+
+  /** What the business is editing right now. Only reaches the public
+   * page once publishDesign() copies it across — the point of the
+   * "Diseño" / "En línea" split. */
+  @Column({ name: 'design_draft', type: 'simple-json', nullable: true })
+  designDraft!: PageDesign | null;
+
+  @Column({ name: 'design_published', type: 'simple-json', nullable: true })
+  designPublished!: PageDesign | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
@@ -188,6 +207,54 @@ export class ProviderProfile {
 
   get photos(): string[] {
     return this.photosJson ?? [];
+  }
+
+  /** What the design editor opens with: whatever's being drafted, else
+   * whatever's live, else PawMates' own defaults. */
+  get draftDesign(): PageDesign {
+    return this.designDraft ?? this.designPublished ?? DEFAULT_PAGE_DESIGN;
+  }
+
+  /**
+   * What /s/<slug> actually renders. A free page always gets the fixed
+   * PawMates design, even if the business drafted (or once published) a
+   * custom one on VIP — downgrading has to take the customization away,
+   * not silently keep serving it.
+   */
+  get effectiveDesign(): PageDesign {
+    if (this.plan !== 'vip') return DEFAULT_PAGE_DESIGN;
+    return this.designPublished ?? DEFAULT_PAGE_DESIGN;
+  }
+
+  get hasUnpublishedDesign(): boolean {
+    if (!this.designDraft) return false;
+    return JSON.stringify(this.designDraft) !== JSON.stringify(this.designPublished);
+  }
+
+  setPlan(plan: string): void {
+    if (!BUSINESS_PLANS.includes(plan as BusinessPlan)) {
+      throw new ValidationError('Ese plan no existe.');
+    }
+    this.plan = plan as BusinessPlan;
+  }
+
+  /** Validates and stores what the business is editing — never touches
+   * the live page. Rejected outright on the free plan so a downgraded
+   * account can't keep editing a design nobody will see. */
+  saveDesignDraft(design: unknown): void {
+    this.assertVip();
+    this.designDraft = parsePageDesign(design);
+  }
+
+  publishDesign(): void {
+    this.assertVip();
+    this.designPublished = this.designDraft ?? DEFAULT_PAGE_DESIGN;
+  }
+
+  private assertVip(): void {
+    if (this.plan !== 'vip') {
+      throw new ValidationError('Personalizar tu página requiere el plan VIP.');
+    }
   }
 
   static draft(accountId: string): ProviderProfile {
@@ -214,6 +281,9 @@ export class ProviderProfile {
     profile.age = null;
     profile.phone = null;
     profile.isPublished = false;
+    profile.plan = DEFAULT_BUSINESS_PLAN;
+    profile.designDraft = null;
+    profile.designPublished = null;
     return profile;
   }
 
