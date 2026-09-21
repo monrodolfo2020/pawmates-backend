@@ -26,7 +26,7 @@ export class AuthController {
   async signup(@Body() dto: SignupDto) {
     if (dto.role === 'provider' && (!dto.facePhoto || !dto.idDocumentPhoto)) {
       throw new ValidationError(
-        'Los paseadores deben subir foto de rostro y de documento.',
+        'Debes subir foto de rostro y de documento para registrar tu negocio.',
       );
     }
     const result = await this.auth.signup(dto);
@@ -47,7 +47,7 @@ export class AuthController {
   ) {
     if (dto.role === 'provider' && (!dto.facePhoto || !dto.idDocumentPhoto)) {
       throw new ValidationError(
-        'Los paseadores deben subir foto de rostro y de documento.',
+        'Debes subir foto de rostro y de documento para registrar tu negocio.',
       );
     }
     const result = await this.auth.addRole(account.accountId, dto);

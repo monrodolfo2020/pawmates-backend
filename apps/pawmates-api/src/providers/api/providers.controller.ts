@@ -8,21 +8,21 @@ import {
   uploadBase64Photo,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { Account } from '../../identity/domain/entities/account.entity';
 import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../domain/entities/provider-profile.entity';
+import { SERVICE_CATEGORIES, slugify } from '../domain/value-objects/service-category';
+import type { ServiceCategory } from '../domain/value-objects/service-category';
 import { SaveProviderProfileDto } from './dto/save-provider-profile.dto';
 
 /**
- * The real Marketplace/provider-directory surface (Fase 0/1 of the
- * "página pública por paseador" plan) — replaces the walker directory
- * and profile the app used to render entirely from static mock data.
- * `GET /v1/providers` and `GET /v1/providers/:accountId` are public, the
- * same way StorefrontController's shopper-facing reads are: a guest can
- * browse a paseador's page before creating an account.
+ * The pet-services directory: every business's listing plus its
+ * shareable micro-page. `GET /v1/providers`, `GET /v1/providers/:accountId`
+ * and `GET /v1/providers/by-slug/:slug` are all public — a guest has to
+ * be able to open a link a business shared with them without an account.
  */
 @Controller('v1/providers')
 export class ProvidersController {
@@ -34,11 +34,16 @@ export class ProvidersController {
     private readonly verifications: Repository<ProviderVerification>,
   ) {}
 
-  /** Public directory — only published profiles (bio + price both set). */
+  /** Public directory — only published profiles, optionally narrowed to
+   * one category. Free-text search stays on the client: the list is small
+   * enough to filter instantly there without a round trip. */
   @Get()
-  async list() {
+  async list(@Query('category') category?: string) {
+    const isKnownCategory = SERVICE_CATEGORIES.includes(category as ServiceCategory);
     const rows = await this.profiles.find({
-      where: { isPublished: true },
+      where: isKnownCategory
+        ? { isPublished: true, category: category as ServiceCategory }
+        : { isPublished: true },
       order: { createdAt: 'DESC' },
     });
     const accountIds = rows.map((r) => r.accountId);
@@ -80,7 +85,27 @@ export class ProvidersController {
             ? await uploadBase64Photo(dto.photo, 'providers')
             : dto.photo;
 
+    // Gallery entries arrive as a mix of brand-new data URLs and the
+    // hosted URLs of photos already uploaded on a previous save — only
+    // the former need a round trip to Blob.
+    const photos =
+      dto.photos === undefined
+        ? undefined
+        : await Promise.all(
+            dto.photos.map((entry) =>
+              isDataUrl(entry) ? uploadBase64Photo(entry, 'providers') : Promise.resolve(entry),
+            ),
+          );
+
     profile.update({
+      category: dto.category,
+      businessName:
+        dto.businessName === undefined ? undefined : dto.businessName === '' ? null : dto.businessName,
+      photos,
+      publicAddress:
+        dto.publicAddress === undefined ? undefined : dto.publicAddress === '' ? null : dto.publicAddress,
+      hours: dto.hours === undefined ? undefined : dto.hours === '' ? null : dto.hours,
+      whatsapp: dto.whatsapp === undefined ? undefined : dto.whatsapp === '' ? null : dto.whatsapp,
       bio: dto.bio === undefined ? undefined : dto.bio === '' ? null : dto.bio,
       serviceArea:
         dto.serviceArea === undefined ? undefined : dto.serviceArea === '' ? null : dto.serviceArea,
@@ -100,8 +125,39 @@ export class ProvidersController {
       age: dto.age === undefined ? undefined : dto.age,
       phone: dto.phone === undefined ? undefined : dto.phone === '' ? null : dto.phone,
     });
+    profile.slug = await this.resolveSlug(profile);
     await this.profiles.save(profile);
     return { data: toOwnResponse(profile) };
+  }
+
+  /**
+   * Keeps a business's /s/<slug> address stable once it exists: renaming
+   * the business doesn't move the page, because links already shared
+   * would break. Only assigns one when there isn't one yet, appending
+   * -2, -3… when another business already took the obvious slug.
+   */
+  private async resolveSlug(profile: ProviderProfile): Promise<string | null> {
+    if (profile.slug) return profile.slug;
+    if (!profile.businessName) return null;
+    const base = slugify(profile.businessName) || profile.accountId.slice(0, 8);
+    for (let attempt = 0; ; attempt++) {
+      const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`;
+      const clash = await this.profiles.findOne({
+        where: { slug: candidate, accountId: Not(profile.accountId) },
+      });
+      if (!clash) return candidate;
+    }
+  }
+
+  /** The shareable micro-page's own endpoint. Must be declared before
+   * `:accountId` below, or Nest would match "by-slug" as an account id. */
+  @Get('by-slug/:slug')
+  async getBySlug(@Param('slug') slug: string) {
+    const profile = await this.profiles.findOne({ where: { slug, isPublished: true } });
+    if (!profile) {
+      throw new ResourceNotFoundError('Esta página no existe o todavía no está publicada.');
+    }
+    return { data: await this.detailFor(profile) };
   }
 
   /** Public detail — 404s for an unpublished/nonexistent profile, same as
@@ -110,13 +166,17 @@ export class ProvidersController {
   async getPublic(@Param('accountId') accountId: string) {
     const profile = await this.profiles.findOne({ where: { accountId, isPublished: true } });
     if (!profile) {
-      throw new ResourceNotFoundError('Este paseador todavía no tiene una página publicada.');
+      throw new ResourceNotFoundError('Este negocio todavía no tiene una página publicada.');
     }
-    const account = await this.accounts.findOne({ where: { id: accountId } });
+    return { data: await this.detailFor(profile) };
+  }
+
+  private async detailFor(profile: ProviderProfile) {
+    const account = await this.accounts.findOne({ where: { id: profile.accountId } });
     const verified = await this.verifications.findOne({
-      where: { accountId, status: 'verified' },
+      where: { accountId: profile.accountId, status: 'verified' },
     });
-    return { data: toDetailResponse(profile, account, verified !== null) };
+    return toDetailResponse(profile, account, verified !== null);
   }
 
   private async loadAccounts(accountIds: string[]): Promise<Map<string, Account>> {
@@ -136,8 +196,14 @@ export class ProvidersController {
 
 function assertProvider(account: AuthenticatedAccount): void {
   if (!account.roles.includes('provider')) {
-    throw new RoleRequiredError('Esta acción requiere el rol de paseador.');
+    throw new RoleRequiredError('Esta acción requiere una cuenta de negocio.');
   }
+}
+
+/** The business's own name wins; the account holder's name is the
+ * fallback for profiles created before businessName existed. */
+function displayName(profile: ProviderProfile, account: Account | null | undefined): string {
+  return profile.businessName ?? account?.name ?? 'Negocio';
 }
 
 // Deliberately excludes address/idNumber/age/phone — those are only for
@@ -150,7 +216,9 @@ function toDirectoryResponse(
 ) {
   return {
     accountId: profile.accountId,
-    name: account?.name ?? 'Paseador',
+    name: displayName(profile, account),
+    category: profile.category,
+    slug: profile.slug,
     photo: profile.photoBase64,
     serviceArea: profile.serviceArea,
     specialty: profile.specialty,
@@ -171,9 +239,15 @@ function toDirectoryResponse(
 function toDetailResponse(profile: ProviderProfile, account: Account | null, identityVerified: boolean) {
   return {
     accountId: profile.accountId,
-    name: account?.name ?? 'Paseador',
+    name: displayName(profile, account),
+    category: profile.category,
+    slug: profile.slug,
     bio: profile.bio,
     photo: profile.photoBase64,
+    photos: profile.photos,
+    publicAddress: profile.publicAddress,
+    hours: profile.hours,
+    whatsapp: profile.whatsapp,
     serviceArea: profile.serviceArea,
     specialty: profile.specialty,
     price: profile.price,
@@ -189,8 +263,15 @@ function toDetailResponse(profile: ProviderProfile, account: Account | null, ide
 function toOwnResponse(profile: ProviderProfile) {
   return {
     accountId: profile.accountId,
+    category: profile.category,
+    businessName: profile.businessName,
+    slug: profile.slug,
     bio: profile.bio,
     photo: profile.photoBase64,
+    photos: profile.photos,
+    publicAddress: profile.publicAddress,
+    hours: profile.hours,
+    whatsapp: profile.whatsapp,
     serviceArea: profile.serviceArea,
     specialty: profile.specialty,
     price: profile.price,

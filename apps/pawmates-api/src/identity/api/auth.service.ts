@@ -55,6 +55,8 @@ export class AuthService {
     password: string;
     role: 'owner' | 'provider';
     name?: string;
+    category?: string;
+    businessName?: string;
     facePhoto?: string;
     idDocumentPhoto?: string;
     profilePhoto?: string;
@@ -82,7 +84,7 @@ export class AuthService {
         params.facePhoto!,
         params.idDocumentPhoto!,
       );
-      await this.seedInitialProfilePhoto(account.id, params.profilePhoto);
+      await this.seedProviderProfile(account, params);
     }
 
     // Fire-and-forget — a slow or misconfigured email provider (see
@@ -108,6 +110,8 @@ export class AuthService {
     accountId: string,
     params: {
       role: 'owner' | 'provider';
+      category?: string;
+      businessName?: string;
       facePhoto?: string;
       idDocumentPhoto?: string;
       profilePhoto?: string;
@@ -125,7 +129,7 @@ export class AuthService {
         params.facePhoto!,
         params.idDocumentPhoto!,
       );
-      await this.seedInitialProfilePhoto(account.id, params.profilePhoto);
+      await this.seedProviderProfile(account, params);
     }
 
     return this.issueToken(account);
@@ -148,20 +152,31 @@ export class AuthService {
     await this.verifications.save(verification);
   }
 
-  /** Optional — lets a new provider start their public page with a photo
-   * right away (reusing their just-taken face photo, or a different one
-   * they picked) instead of landing on a bare "Editar mi página pública"
-   * later. Only ever runs once, at signup/addRole, so there's no existing
-   * ProviderProfile yet to clobber; the provider is free to change this
-   * photo anytime afterward — unlike facePhoto/idDocumentPhoto above,
-   * which stay fixed in ProviderVerification for admin review. */
-  private async seedInitialProfilePhoto(
-    accountId: string,
-    profilePhoto?: string,
+  /** Gives a brand-new business its directory listing up front — the
+   * category it picked at signup and a name to show (its own, or the
+   * person's as a fallback), plus optionally the photo it chose there
+   * ("Usar esta fotografía", reusing the just-taken face photo or a
+   * different one). Without this the business would land on a completely
+   * blank "Editar mi página pública" and wouldn't even know which
+   * category it registered as. Only ever runs once, at signup/addRole,
+   * so there's no existing ProviderProfile to clobber; everything here
+   * stays editable afterward — unlike facePhoto/idDocumentPhoto, which
+   * stay fixed in ProviderVerification for admin review.
+   *
+   * No slug yet: ProvidersController assigns that on the first real save
+   * (it's the only layer that can check the table for collisions). */
+  private async seedProviderProfile(
+    account: Account,
+    params: { category?: string; businessName?: string; profilePhoto?: string },
   ): Promise<void> {
-    if (!profilePhoto) return;
-    const profile = ProviderProfile.draft(accountId);
-    profile.update({ photo: await uploadBase64Photo(profilePhoto, 'providers') });
+    const profile = ProviderProfile.draft(account.id);
+    profile.update({
+      category: params.category,
+      businessName: params.businessName ?? account.name,
+      photo: params.profilePhoto
+        ? await uploadBase64Photo(params.profilePhoto, 'providers')
+        : undefined,
+    });
     await this.providerProfiles.save(profile);
   }
 

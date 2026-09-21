@@ -139,7 +139,49 @@ describe('AuthService', () => {
           status: 'pending',
         }),
       );
-      expect(providerProfiles.save).not.toHaveBeenCalled();
+    });
+
+    it('seeds the directory listing with the category and name picked at signup', async () => {
+      accounts.findOne.mockResolvedValue(null);
+      verifications.findOne.mockResolvedValue(null);
+
+      await service.signup({
+        email: 'vet@test.com',
+        password: 'password123',
+        role: 'provider',
+        name: 'Ana Pérez',
+        category: 'vet',
+        businessName: 'Veterinaria San Ángel',
+        facePhoto: 'face-b64',
+        idDocumentPhoto: 'id-b64',
+      });
+
+      expect(providerProfiles.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'generated-account-id',
+          category: 'vet',
+          businessName: 'Veterinaria San Ángel',
+          isPublished: false, // no bio yet
+        }),
+      );
+    });
+
+    it("falls back to the person's own name when no business name is given", async () => {
+      accounts.findOne.mockResolvedValue(null);
+      verifications.findOne.mockResolvedValue(null);
+
+      await service.signup({
+        email: 'walker3@test.com',
+        password: 'password123',
+        role: 'provider',
+        name: 'Lucía Paseos',
+        facePhoto: 'face-b64',
+        idDocumentPhoto: 'id-b64',
+      });
+
+      expect(providerProfiles.save).toHaveBeenCalledWith(
+        expect.objectContaining({ businessName: 'Lucía Paseos', category: 'walker' }),
+      );
     });
 
     it('seeds a public-page photo when the provider picks one at signup', async () => {
@@ -214,7 +256,6 @@ describe('AuthService', () => {
 
       expect(result.roles).toEqual(['owner', 'provider']);
       expect(verifications.save).toHaveBeenCalled();
-      expect(providerProfiles.save).not.toHaveBeenCalled();
     });
 
     it('seeds a public-page photo when profilePhoto is given', async () => {

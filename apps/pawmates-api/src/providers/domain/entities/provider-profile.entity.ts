@@ -8,12 +8,19 @@ import {
 } from 'typeorm';
 import { ulid } from 'ulid';
 import { bigintTransformer } from './bigint.transformer';
+import {
+  DEFAULT_SERVICE_CATEGORY,
+  SERVICE_CATEGORIES,
+  requiresRate,
+} from '../value-objects/service-category';
+import type { ServiceCategory } from '../value-objects/service-category';
 
 const MAX_BIO_LENGTH = 600;
 const MAX_SHORT_FIELD_LENGTH = 120;
 const MAX_LONG_FIELD_LENGTH = 300;
 const MIN_AGE = 18;
 const MAX_AGE = 90;
+const MAX_PHOTOS = 8;
 
 function assertBioValid(bio: string): void {
   if (bio.length === 0 || bio.length > MAX_BIO_LENGTH) {
@@ -45,21 +52,38 @@ function assertAgeValid(age: number): void {
   }
 }
 
+function assertCategoryValid(category: string): asserts category is ServiceCategory {
+  if (!SERVICE_CATEGORIES.includes(category as ServiceCategory)) {
+    throw new ValidationError('Esa categoría de servicio no existe.');
+  }
+}
+
+function assertPhotosValid(photos: string[]): void {
+  if (photos.length > MAX_PHOTOS) {
+    throw new ValidationError(`Puedes subir como máximo ${MAX_PHOTOS} fotos.`);
+  }
+}
+
 /**
- * ProviderProfile — the real, editable public-facing page for a
- * paseador's own account (Marketplace bounded context, formerly stubbed
- * out entirely by an always-available fake in-process adapter). One per
- * provider account (`accountId` unique).
+ * ProviderProfile — the real, editable public-facing page for one pet
+ * business: its listing in the directory and its shareable micro-page at
+ * /s/<slug>. One per provider account (`accountId` unique).
+ *
+ * Originally walkers-only, hence the walk-specific fields
+ * (walkingSpots, the per-walk `price`); `category` generalizes it to the
+ * rest of the directory (vets, grooming, boarding…), and only 'walker'
+ * still requires a rate, since that's the only category with a booking
+ * pipeline behind it — see requiresRate.
  *
  * `isPublished` is never set directly by a caller — it's derived every
- * time `update()` runs, from whether the two fields a shopper actually
- * needs to book (bio + price) are both present. That keeps "am I visible
- * in the directory yet" a fact about the data, not a separate toggle a
- * provider could leave stale (published with an empty bio, or hidden
- * despite a complete profile). address/idNumber/age/phone don't gate
- * publishing — they're for trust/verification, not required to have a
- * working page — see ProvidersController's comment on why they're never
- * serialized into the public GET responses.
+ * time `update()` runs, from whether the fields a visitor actually needs
+ * are present (name + description, plus a rate for walkers). That keeps
+ * "am I visible in the directory yet" a fact about the data, not a
+ * separate toggle a provider could leave stale (published with an empty
+ * bio, or hidden despite a complete profile). address/idNumber/age/phone
+ * don't gate publishing — they're for trust/verification, not required to
+ * have a working page — see ProvidersController's comment on why they're
+ * never serialized into the public GET responses.
  */
 @Entity({ name: 'providers_profiles' })
 export class ProviderProfile {
@@ -69,6 +93,21 @@ export class ProviderProfile {
 
   @Column({ name: 'account_id', type: 'text', unique: true })
   accountId!: string;
+
+  @Column({ type: 'text', default: DEFAULT_SERVICE_CATEGORY })
+  category!: ServiceCategory;
+
+  /** What the directory and the micro-page show as the heading. Falls
+   * back to the account's own name at signup (see AuthService) so a
+   * brand-new business is never nameless. */
+  @Column({ name: 'business_name', type: 'text', nullable: true })
+  businessName!: string | null;
+
+  /** The shareable /s/<slug> address. Assigned by ProvidersController
+   * (which can check the rest of the table for collisions — an entity
+   * method never queries the database), never chosen by the business. */
+  @Column({ type: 'text', nullable: true, unique: true })
+  slug!: string | null;
 
   @Column({ type: 'text', nullable: true })
   bio!: string | null;
@@ -81,6 +120,12 @@ export class ProviderProfile {
 
   @Column({ name: 'photo_base64', type: 'text', nullable: true })
   photoBase64!: string | null;
+
+  /** Gallery for the micro-page — hosted URLs, uploaded the same way as
+   * photoBase64 (see ProvidersController). Stored as JSON; null on rows
+   * that predate the gallery, which `photos` normalizes to []. */
+  @Column({ name: 'photos', type: 'simple-json', nullable: true })
+  photosJson!: string[] | null;
 
   @Column({
     name: 'price_amount',
@@ -99,6 +144,18 @@ export class ProviderProfile {
 
   @Column({ name: 'walking_spots', type: 'text', nullable: true })
   walkingSpots!: string | null;
+
+  /** Where customers can show up — a storefront address, unlike the
+   * private `address` below (which is the provider's own home address,
+   * collected for verification and never published). */
+  @Column({ name: 'public_address', type: 'text', nullable: true })
+  publicAddress!: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  hours!: string | null;
+
+  @Column({ type: 'text', nullable: true })
+  whatsapp!: string | null;
 
   // Private — trust/verification info, never returned from a public
   // endpoint (see ProvidersController's toDirectoryResponse/toDetailResponse).
@@ -129,10 +186,21 @@ export class ProviderProfile {
       : null;
   }
 
+  get photos(): string[] {
+    return this.photosJson ?? [];
+  }
+
   static draft(accountId: string): ProviderProfile {
     const profile = new ProviderProfile();
     profile.id = ulid().toLowerCase();
     profile.accountId = accountId;
+    profile.category = DEFAULT_SERVICE_CATEGORY;
+    profile.businessName = null;
+    profile.slug = null;
+    profile.photosJson = null;
+    profile.publicAddress = null;
+    profile.hours = null;
+    profile.whatsapp = null;
     profile.bio = null;
     profile.serviceArea = null;
     profile.specialty = null;
@@ -150,6 +218,12 @@ export class ProviderProfile {
   }
 
   update(params: {
+    category?: string;
+    businessName?: string | null;
+    photos?: string[];
+    publicAddress?: string | null;
+    hours?: string | null;
+    whatsapp?: string | null;
     bio?: string | null;
     serviceArea?: string | null;
     specialty?: string | null;
@@ -162,6 +236,34 @@ export class ProviderProfile {
     age?: number | null;
     phone?: string | null;
   }): void {
+    if (params.category !== undefined) {
+      assertCategoryValid(params.category);
+      this.category = params.category;
+    }
+    if (params.businessName !== undefined) {
+      if (params.businessName !== null) {
+        assertShortFieldValid('El nombre del negocio', params.businessName);
+      }
+      this.businessName = params.businessName;
+    }
+    if (params.photos !== undefined) {
+      assertPhotosValid(params.photos);
+      this.photosJson = params.photos;
+    }
+    if (params.publicAddress !== undefined) {
+      if (params.publicAddress !== null) {
+        assertLongFieldValid('La dirección del negocio', params.publicAddress);
+      }
+      this.publicAddress = params.publicAddress;
+    }
+    if (params.hours !== undefined) {
+      if (params.hours !== null) assertLongFieldValid('Los horarios', params.hours);
+      this.hours = params.hours;
+    }
+    if (params.whatsapp !== undefined) {
+      if (params.whatsapp !== null) assertShortFieldValid('El WhatsApp', params.whatsapp);
+      this.whatsapp = params.whatsapp;
+    }
     if (params.bio !== undefined) {
       if (params.bio !== null) assertBioValid(params.bio);
       this.bio = params.bio;
@@ -213,6 +315,10 @@ export class ProviderProfile {
       if (params.phone !== null) assertShortFieldValid('El teléfono', params.phone);
       this.phone = params.phone;
     }
-    this.isPublished = Boolean(this.bio && this.priceAmount !== null);
+    this.isPublished = Boolean(
+      this.bio &&
+        this.businessName &&
+        (!requiresRate(this.category) || this.priceAmount !== null),
+    );
   }
 }

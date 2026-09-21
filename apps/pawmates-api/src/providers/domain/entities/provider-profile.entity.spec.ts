@@ -22,19 +22,75 @@ describe('ProviderProfile aggregate', () => {
     expect(profile.isPublished).toBe(false);
   });
 
-  it('publishes automatically once both bio and price are set', () => {
+  it('publishes a walker once name, bio and price are all set', () => {
     const profile = ProviderProfile.draft('account-1');
-    profile.update({ bio: 'Paseadora de tiempo completo.', price: Money.of(85000, 'MXN') });
+    profile.update({
+      businessName: 'Paseos Lucía',
+      bio: 'Paseadora de tiempo completo.',
+      price: Money.of(85000, 'MXN'),
+    });
     expect(profile.isPublished).toBe(true);
     expect(profile.price?.equals(Money.of(85000, 'MXN'))).toBe(true);
   });
 
-  it('unpublishes again if the price is cleared', () => {
+  it('unpublishes a walker again if the price is cleared', () => {
     const profile = ProviderProfile.draft('account-1');
-    profile.update({ bio: 'Paseadora de tiempo completo.', price: Money.of(85000, 'MXN') });
+    profile.update({
+      businessName: 'Paseos Lucía',
+      bio: 'Paseadora de tiempo completo.',
+      price: Money.of(85000, 'MXN'),
+    });
     profile.update({ price: null });
     expect(profile.isPublished).toBe(false);
     expect(profile.price).toBeNull();
+  });
+
+  it('defaults to the walker category', () => {
+    expect(ProviderProfile.draft('account-1').category).toBe('walker');
+  });
+
+  it('publishes a non-walker business without any rate — only walkers get booked', () => {
+    const profile = ProviderProfile.draft('account-1');
+    profile.update({
+      category: 'vet',
+      businessName: 'Veterinaria San Ángel',
+      bio: 'Consultas, vacunas y cirugía.',
+    });
+    expect(profile.isPublished).toBe(true);
+    expect(profile.price).toBeNull();
+  });
+
+  it('stays unpublished without a business name, whatever the category', () => {
+    const profile = ProviderProfile.draft('account-1');
+    profile.update({ category: 'grooming', bio: 'Baño y corte.' });
+    expect(profile.isPublished).toBe(false);
+  });
+
+  it('rejects an unknown category', () => {
+    const profile = ProviderProfile.draft('account-1');
+    expect(() => profile.update({ category: 'taquería' })).toThrow(ValidationError);
+  });
+
+  it('keeps the gallery as a list and caps it at 8 photos', () => {
+    const profile = ProviderProfile.draft('account-1');
+    expect(profile.photos).toEqual([]);
+    profile.update({ photos: ['https://blob.test/a.jpg', 'https://blob.test/b.jpg'] });
+    expect(profile.photos).toEqual(['https://blob.test/a.jpg', 'https://blob.test/b.jpg']);
+    expect(() => profile.update({ photos: new Array(9).fill('https://blob.test/x.jpg') })).toThrow(
+      ValidationError,
+    );
+  });
+
+  it('accepts the micro-page contact fields', () => {
+    const profile = ProviderProfile.draft('account-1');
+    profile.update({
+      publicAddress: 'Av. Reforma 222, CDMX',
+      hours: 'Lun a Sáb, 9:00 a 19:00',
+      whatsapp: '5215512345678',
+    });
+    expect(profile.publicAddress).toBe('Av. Reforma 222, CDMX');
+    expect(profile.hours).toBe('Lun a Sáb, 9:00 a 19:00');
+    expect(profile.whatsapp).toBe('5215512345678');
   });
 
   it('leaves omitted fields untouched', () => {
@@ -68,7 +124,7 @@ describe('ProviderProfile aggregate', () => {
     expect(profile.idNumber).toBe('INE-ABC123');
     expect(profile.age).toBe(30);
     expect(profile.phone).toBe('5512345678');
-    expect(profile.isPublished).toBe(false); // still no bio/price
+    expect(profile.isPublished).toBe(false); // still no name/bio/price
   });
 
   it('rejects an age outside 18-90', () => {

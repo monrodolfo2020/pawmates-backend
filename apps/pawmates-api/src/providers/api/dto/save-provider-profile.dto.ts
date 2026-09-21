@@ -1,10 +1,12 @@
 import {
+  IsArray,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
   Min,
 } from 'class-validator';
+import { SERVICE_CATEGORIES } from '../../domain/value-objects/service-category';
 
 /**
  * PATCH /v1/providers/me — every field is optional (partial update: send
@@ -17,6 +19,35 @@ import {
  * ProvidersController's comments.
  */
 export class SaveProviderProfileDto {
+  @IsString()
+  @IsIn([...SERVICE_CATEGORIES])
+  @IsOptional()
+  category?: string;
+
+  @IsString()
+  @IsOptional()
+  businessName?: string;
+
+  /** Gallery for the micro-page: base64 data URLs for new photos, the
+   * existing hosted URL for ones already uploaded. Unlike the other
+   * fields, this replaces the whole list — an empty array clears it. */
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  photos?: string[];
+
+  @IsString()
+  @IsOptional()
+  publicAddress?: string;
+
+  @IsString()
+  @IsOptional()
+  hours?: string;
+
+  @IsString()
+  @IsOptional()
+  whatsapp?: string;
+
   @IsString()
   @IsOptional()
   bio?: string;
