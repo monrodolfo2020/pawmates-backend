@@ -189,11 +189,17 @@ export class AuthService {
     // Private storage, not the public one every other photo uses: these
     // two are a face and an official ID document, and the only reader is
     // the admin reviewing them (see private-blob-storage.ts).
-    verification.facePhotoBase64 = await uploadPrivateBase64Photo(facePhoto, 'verifications');
-    verification.idDocumentPhotoBase64 = await uploadPrivateBase64Photo(
-      idDocumentPhoto,
-      'verifications',
-    );
+    //
+    // In parallel, because each upload has its own timeout before it
+    // gives up and keeps the image inline — doing them in sequence made
+    // the worst case twice as long, on a request that already has a
+    // 30-second budget on Vercel.
+    const [storedFace, storedIdDocument] = await Promise.all([
+      uploadPrivateBase64Photo(facePhoto, 'verifications'),
+      uploadPrivateBase64Photo(idDocumentPhoto, 'verifications'),
+    ]);
+    verification.facePhotoBase64 = storedFace;
+    verification.idDocumentPhotoBase64 = storedIdDocument;
     verification.status = 'pending';
     await this.verifications.save(verification);
   }

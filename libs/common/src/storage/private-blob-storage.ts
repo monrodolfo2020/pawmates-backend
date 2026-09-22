@@ -1,4 +1,4 @@
-import { copy, del, issueSignedToken, presignUrl, put } from '@vercel/blob';
+import { del, issueSignedToken, presignUrl, put } from '@vercel/blob';
 import { ulid } from 'ulid';
 import { ValidationError } from '../errors/domain-error';
 
@@ -8,6 +8,47 @@ const DATA_URL_PATTERN = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/;
  * purpose: it exists so one admin can look at one photo in one sitting,
  * and a link that leaks should stop working before it can be passed on. */
 const SIGNED_URL_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * How long to wait for the private upload before giving up and keeping
+ * the image inline. Signup uploads two photos in sequence and the
+ * function's own budget is 30s, so this has to leave room for the rest
+ * of the request: a blob store that is slow or unreachable must not be
+ * able to hold a signup open until the whole function times out.
+ */
+const UPLOAD_TIMEOUT_MS = 8000;
+
+async function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`La subida excedió ${ms} ms.`)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/**
+ * Private access is a property of the **store**, not of an individual
+ * blob: a public store refuses a private write outright ("Cannot use
+ * private access on a public store"). The app's galleries, avatars and
+ * covers belong in a public store — they're published on pages anyone
+ * can open — so the identity photos need a second store, created with
+ * private access and connected to the project, and writes have to be
+ * pointed at it explicitly with its own token.
+ *
+ * When that variable isn't set there is no private store to write to, so
+ * the images stay inside our own database instead (see
+ * uploadPrivateBase64Photo). Set it and they move to object storage with
+ * no code change.
+ */
+function privateStoreToken(): string | undefined {
+  return process.env.BLOB_PRIVATE_READ_WRITE_TOKEN?.trim() || undefined;
+}
 
 /**
  * Storage for images that must NOT be reachable by anyone holding a URL:
@@ -41,21 +82,33 @@ export async function uploadPrivateBase64Photo(
   const extension = mimeType.split('/')[1] ?? 'jpg';
   const buffer = Buffer.from(base64Data, 'base64');
 
+  const token = privateStoreToken();
+  if (!token) {
+    // No private store configured. Keeping the image in our own
+    // database is the correct answer, not a degraded one: it's reachable
+    // only through the authenticated admin endpoint, where a write to
+    // the public store would be openable by anyone holding the URL.
+    return dataUrl;
+  }
+
   try {
-    const blob = await put(`${folder}/${ulid().toLowerCase()}.${extension}`, buffer, {
-      access: 'private',
-      contentType: mimeType,
-      addRandomSuffix: false,
-    });
+    const blob = await withTimeout(
+      put(`${folder}/${ulid().toLowerCase()}.${extension}`, buffer, {
+        access: 'private',
+        token,
+        contentType: mimeType,
+        addRandomSuffix: false,
+      }),
+      UPLOAD_TIMEOUT_MS,
+    );
     // The pathname, not blob.url: a private blob's plain URL returns 401,
     // and persisting one would only invite someone to try it.
     return blob.pathname;
   } catch (error) {
-    // Private blobs need a store that supports them, and not every store
-    // does. Rather than fail the signup — which is what happened the
-    // first time this shipped — keep the image in our own database,
-    // where it is reachable only through the authenticated admin
-    // endpoint.
+    // A configured private store that refuses the write or doesn't
+    // answer — wrong token, wrong store, quota, an outage. Rather than
+    // fail the signup, which is what happened the first time this
+    // shipped, keep the image inline.
     //
     // Never falls back to the public store. Being heavier to store is a
     // cost; being openable by anyone holding a URL is the exact thing
@@ -102,10 +155,13 @@ export function classifyStoredPhoto(value: string): StoredPhotoKind {
  */
 export async function signedPhotoUrl(value: string): Promise<string | null> {
   if (classifyStoredPhoto(value) !== 'private') return value;
+  const storeToken = privateStoreToken();
+  if (!storeToken) return null; // nothing to sign against any more
   try {
     const validUntil = Date.now() + SIGNED_URL_TTL_MS;
     const token = await issueSignedToken({
       pathname: value,
+      token: storeToken,
       operations: ['get'],
       validUntil,
     });
@@ -122,15 +178,23 @@ export async function signedPhotoUrl(value: string): Promise<string | null> {
 }
 
 /**
- * Moves an image that was written to the public store into the private
- * one, and deletes the public original. Used to re-secure the
- * verification photos uploaded before this module existed, which are
- * still readable by anyone holding their URL.
+ * Takes an image that was written to the public store, puts it somewhere
+ * private, and deletes the public original. Used to re-secure the
+ * identity photos uploaded before this module existed, which anyone
+ * holding their URL can still open.
  *
- * The delete happens only after the copy succeeds, so a failure halfway
- * leaves the original reachable rather than losing the image. Calling it
- * again on the same row is harmless: a value that isn't a public URL is
- * returned untouched.
+ * It downloads the object and re-uploads it through
+ * uploadPrivateBase64Photo rather than copying within the store, because
+ * private access is a store-level property: there is nothing private to
+ * copy *to* inside a public store. Routing it through the same upload
+ * path means this works in both configurations — into the private store
+ * when one is configured, into our own database when not — and in
+ * neither case does the image keep a public address.
+ *
+ * The delete happens only after the image is safely stored elsewhere, so
+ * a failure halfway leaves the original reachable rather than losing it.
+ * Calling it again on the same value is harmless: anything that isn't a
+ * public URL is returned untouched.
  */
 export async function moveToPrivateStorage(
   value: string,
@@ -138,14 +202,24 @@ export async function moveToPrivateStorage(
 ): Promise<string> {
   if (classifyStoredPhoto(value) !== 'public') return value;
 
-  const extension = value.split('.').pop()?.split('?')[0] ?? 'jpg';
-  const target = `${folder}/${ulid().toLowerCase()}.${extension}`;
-  const copied = await copy(value, target, { access: 'private' });
+  const response = await fetch(value);
+  if (!response.ok) {
+    throw new Error(
+      `No se pudo descargar la imagen a resguardar (HTTP ${response.status}).`,
+    );
+  }
+  const contentType = response.headers.get('content-type') ?? 'image/jpeg';
+  const base64 = Buffer.from(await response.arrayBuffer()).toString('base64');
+  const stored = await uploadPrivateBase64Photo(
+    `data:${contentType};base64,${base64}`,
+    folder,
+  );
+
   try {
     await del(value);
   } catch {
-    // The copy is what matters; an orphaned public object is a cleanup
-    // problem, not a reason to leave the row pointing at it.
+    // Storing it privately is what matters; an orphaned public object is
+    // a cleanup problem, not a reason to leave the row pointing at it.
   }
-  return copied.pathname;
+  return stored;
 }
