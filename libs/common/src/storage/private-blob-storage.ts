@@ -40,14 +40,32 @@ export async function uploadPrivateBase64Photo(
   const [, mimeType, base64Data] = match;
   const extension = mimeType.split('/')[1] ?? 'jpg';
   const buffer = Buffer.from(base64Data, 'base64');
-  const blob = await put(`${folder}/${ulid().toLowerCase()}.${extension}`, buffer, {
-    access: 'private',
-    contentType: mimeType,
-    addRandomSuffix: false,
-  });
-  // The pathname, not blob.url: a private blob's plain URL returns 401,
-  // and persisting one would only invite someone to try it.
-  return blob.pathname;
+
+  try {
+    const blob = await put(`${folder}/${ulid().toLowerCase()}.${extension}`, buffer, {
+      access: 'private',
+      contentType: mimeType,
+      addRandomSuffix: false,
+    });
+    // The pathname, not blob.url: a private blob's plain URL returns 401,
+    // and persisting one would only invite someone to try it.
+    return blob.pathname;
+  } catch (error) {
+    // Private blobs need a store that supports them, and not every store
+    // does. Rather than fail the signup — which is what happened the
+    // first time this shipped — keep the image in our own database,
+    // where it is reachable only through the authenticated admin
+    // endpoint.
+    //
+    // Never falls back to the public store. Being heavier to store is a
+    // cost; being openable by anyone holding a URL is the exact thing
+    // this module exists to prevent.
+    console.error(
+      '[private-blob-storage] private upload failed, keeping the image inline instead',
+      error,
+    );
+    return dataUrl;
+  }
 }
 
 /**
