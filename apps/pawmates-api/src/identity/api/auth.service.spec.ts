@@ -12,6 +12,7 @@ import { Account } from '../domain/entities/account.entity';
 import { EmailVerificationCode } from '../domain/entities/email-verification-code.entity';
 import { PasswordResetToken } from '../domain/entities/password-reset-token.entity';
 import { ProviderVerification } from '../domain/entities/provider-verification.entity';
+import { LegalAcceptance } from '../domain/entities/legal-acceptance.entity';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 
 // Real uploads need a network call + BLOB_READ_WRITE_TOKEN — this only
@@ -28,6 +29,13 @@ jest.mock('@pawmates/common', () => ({
   ),
 }));
 
+/** The shape AuthController has already validated by the time it calls
+ * the service — the service records what it is handed. */
+const ACCEPTED = [
+  { type: 'privacy_notice', version: '1.0' },
+  { type: 'owner_terms', version: '1.0' },
+];
+
 describe('AuthService', () => {
   let service: AuthService;
   let accounts: jest.Mocked<
@@ -43,6 +51,9 @@ describe('AuthService', () => {
     Pick<Repository<PasswordResetToken>, 'findOne' | 'save'>
   >;
   let providerProfiles: jest.Mocked<Pick<Repository<ProviderProfile>, 'save'>>;
+  let legalAcceptances: jest.Mocked<
+    Pick<Repository<LegalAcceptance>, 'findOne' | 'save'>
+  >;
   let jwt: jest.Mocked<Pick<JwtService, 'signAsync'>>;
 
   beforeEach(() => {
@@ -77,6 +88,12 @@ describe('AuthService', () => {
     providerProfiles = {
       save: jest.fn((p) => Promise.resolve(p as ProviderProfile)),
     };
+    // findOne null keeps recordAcceptances on the "nothing on file yet,
+    // write it" path.
+    legalAcceptances = {
+      findOne: jest.fn().mockResolvedValue(null),
+      save: jest.fn((a) => Promise.resolve(a as LegalAcceptance)),
+    };
     jwt = { signAsync: jest.fn().mockResolvedValue('signed-token') };
 
     service = new AuthService(
@@ -85,6 +102,7 @@ describe('AuthService', () => {
       verificationCodes as unknown as Repository<EmailVerificationCode>,
       passwordResetTokens as unknown as Repository<PasswordResetToken>,
       providerProfiles as unknown as Repository<ProviderProfile>,
+      legalAcceptances as unknown as Repository<LegalAcceptance>,
       jwt as unknown as JwtService,
     );
   });
@@ -94,6 +112,7 @@ describe('AuthService', () => {
       accounts.findOne.mockResolvedValue(null);
 
       const result = await service.signup({
+        acceptedLegal: ACCEPTED,
         email: 'Owner@Test.com',
         password: 'password123',
         role: 'owner',
@@ -131,6 +150,7 @@ describe('AuthService', () => {
       verifications.findOne.mockResolvedValue(null);
 
       await service.signup({
+        acceptedLegal: ACCEPTED,
         email: 'walker@test.com',
         password: 'password123',
         role: 'provider',
@@ -155,6 +175,7 @@ describe('AuthService', () => {
       verifications.findOne.mockResolvedValue(null);
 
       await service.signup({
+        acceptedLegal: ACCEPTED,
         email: 'vet@test.com',
         password: 'password123',
         role: 'provider',
@@ -180,6 +201,7 @@ describe('AuthService', () => {
       verifications.findOne.mockResolvedValue(null);
 
       await service.signup({
+        acceptedLegal: ACCEPTED,
         email: 'walker3@test.com',
         password: 'password123',
         role: 'provider',
@@ -198,6 +220,7 @@ describe('AuthService', () => {
       verifications.findOne.mockResolvedValue(null);
 
       await service.signup({
+        acceptedLegal: ACCEPTED,
         email: 'walker2@test.com',
         password: 'password123',
         role: 'provider',
@@ -258,6 +281,7 @@ describe('AuthService', () => {
       verifications.findOne.mockResolvedValue(null);
 
       const result = await service.addRole('acc-1', {
+        acceptedLegal: ACCEPTED,
         role: 'provider',
         facePhoto: 'face-b64',
         idDocumentPhoto: 'id-b64',
@@ -275,6 +299,7 @@ describe('AuthService', () => {
       verifications.findOne.mockResolvedValue(null);
 
       await service.addRole('acc-1', {
+        acceptedLegal: ACCEPTED,
         role: 'provider',
         facePhoto: 'face-b64',
         idDocumentPhoto: 'id-b64',

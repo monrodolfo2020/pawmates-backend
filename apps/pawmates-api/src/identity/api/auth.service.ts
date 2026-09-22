@@ -18,6 +18,9 @@ import type { Role } from '../domain/entities/account.entity';
 import { EmailVerificationCode } from '../domain/entities/email-verification-code.entity';
 import { PasswordResetToken } from '../domain/entities/password-reset-token.entity';
 import { ProviderVerification } from '../domain/entities/provider-verification.entity';
+import { LegalAcceptance } from '../domain/entities/legal-acceptance.entity';
+import { recordAcceptances } from './legal.controller';
+import type { LegalDocumentType } from '../domain/value-objects/legal-document';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 
 // Where the emailed reset link points — the deployed frontend, not this
@@ -48,6 +51,8 @@ export class AuthService {
     private readonly passwordResetTokens: Repository<PasswordResetToken>,
     @InjectRepository(ProviderProfile)
     private readonly providerProfiles: Repository<ProviderProfile>,
+    @InjectRepository(LegalAcceptance)
+    private readonly legalAcceptances: Repository<LegalAcceptance>,
     private readonly jwt: JwtService,
   ) {}
 
@@ -61,7 +66,12 @@ export class AuthService {
     facePhoto?: string;
     idDocumentPhoto?: string;
     profilePhoto?: string;
-  }): Promise<AuthResult> {
+    acceptedLegal: { type: string; version: string }[];
+  },
+  /** Kept with the acceptance record — it's what makes the record worth
+   * anything if the acceptance is ever disputed. */
+  context?: { ipAddress?: string | null; userAgent?: string | null },
+  ): Promise<AuthResult> {
     const existing = await this.accounts.findOne({
       where: { email: params.email.toLowerCase() },
     });
@@ -78,6 +88,20 @@ export class AuthService {
     account.roles = [params.role];
     account.emailVerifiedAt = null;
     await this.accounts.save(account);
+
+    // Written before anything else the account does, so an account can
+    // never exist without the record of what it accepted. AuthController
+    // has already checked that the required documents are all here and
+    // current.
+    await recordAcceptances(this.legalAcceptances, {
+      accountId: account.id,
+      documents: params.acceptedLegal.map((a) => ({
+        type: a.type as LegalDocumentType,
+        version: a.version,
+      })),
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
 
     if (params.role === 'provider') {
       await this.saveVerification(
@@ -116,13 +140,28 @@ export class AuthService {
       facePhoto?: string;
       idDocumentPhoto?: string;
       profilePhoto?: string;
+      acceptedLegal: { type: string; version: string }[];
     },
+    context?: { ipAddress?: string | null; userAgent?: string | null },
   ): Promise<AuthResult> {
     const account = await this.accounts.findOneOrFail({
       where: { id: accountId },
     });
     account.addRole(params.role);
     await this.accounts.save(account);
+
+    // An owner becoming a business has to accept the provider agreement
+    // — it governs a relationship they didn't have until this call, so
+    // the acceptance they gave at signup doesn't cover it.
+    await recordAcceptances(this.legalAcceptances, {
+      accountId: account.id,
+      documents: params.acceptedLegal.map((a) => ({
+        type: a.type as LegalDocumentType,
+        version: a.version,
+      })),
+      ipAddress: context?.ipAddress,
+      userAgent: context?.userAgent,
+    });
 
     if (params.role === 'provider') {
       await this.saveVerification(

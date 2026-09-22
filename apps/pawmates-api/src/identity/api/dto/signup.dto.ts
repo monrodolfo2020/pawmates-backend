@@ -1,10 +1,16 @@
+import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsEmail,
   IsIn,
   IsOptional,
   IsString,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+import { AcceptLegalDto } from './accept-legal.dto';
 import { SERVICE_CATEGORIES } from '../../../providers/domain/value-objects/service-category';
 
 /**
@@ -59,4 +65,18 @@ export class SignupDto {
   @IsString()
   @IsOptional()
   profilePhoto?: string;
+
+  /**
+   * The documents this person accepted, each with the version their
+   * screen showed. Required: an account can't be created without it, and
+   * the version has to be the one in force (see legal-document.ts). A
+   * provider sending identity photos must include the separate
+   * verification consent too — checked in AuthController.
+   */
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => AcceptLegalDto)
+  acceptedLegal!: AcceptLegalDto[];
 }

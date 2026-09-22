@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AdminController } from './api/admin.controller';
+import { LegalController } from './api/legal.controller';
 import { AuthController } from './api/auth.controller';
 import { AuthService } from './api/auth.service';
 import { MeController } from './api/me.controller';
@@ -8,6 +9,7 @@ import { PetsController } from './api/pets.controller';
 import { Account } from './domain/entities/account.entity';
 import { EmailVerificationCode } from './domain/entities/email-verification-code.entity';
 import { PasswordResetToken } from './domain/entities/password-reset-token.entity';
+import { LegalAcceptance } from './domain/entities/legal-acceptance.entity';
 import { Pet } from './domain/entities/pet.entity';
 import { ProviderVerification } from './domain/entities/provider-verification.entity';
 import { CatalogItem } from '../commerce/domain/entities/catalog-item.entity';
@@ -25,6 +27,7 @@ import { PlanActivationCode } from '../providers/domain/entities/plan-activation
       ProviderVerification,
       EmailVerificationCode,
       PasswordResetToken,
+      LegalAcceptance,
       // Read-only for AdminController's platform-wide oversight — Commerce
       // still owns writes to these via CommerceModule/CommerceProcessManager.
       // CatalogItem is the one exception: admin manages it directly (adding
@@ -45,7 +48,7 @@ import { PlanActivationCode } from '../providers/domain/entities/plan-activation
       PlanActivationCode,
     ]),
   ],
-  controllers: [AuthController, MeController, PetsController, AdminController],
+  controllers: [AuthController, MeController, PetsController, AdminController, LegalController],
   providers: [AuthService],
 })
 export class IdentityModule {}
