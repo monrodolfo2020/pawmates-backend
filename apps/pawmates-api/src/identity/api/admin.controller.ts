@@ -3,7 +3,10 @@ import {
   JwtAuthGuard,
   ResourceNotFoundError,
   RoleRequiredError,
+  classifyStoredPhoto,
   isDataUrl,
+  moveToPrivateStorage,
+  signedPhotoUrl,
   uploadBase64Photo,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
@@ -88,13 +91,27 @@ export class AdminController {
           ).map((p) => p.accountId),
         )
       : new Set<string>();
+    // These two are private blobs, so the row holds a pathname rather
+    // than a usable URL — each response gets its own short-lived signed
+    // link (see private-blob-storage.ts). A photo that can't be signed
+    // comes back null and renders as a placeholder, so one broken object
+    // doesn't take down the whole list.
+    const signed = await Promise.all(
+      rows.map(async (v) => ({
+        id: v.id,
+        facePhoto: await signedPhotoUrl(v.facePhotoBase64),
+        idDocumentPhoto: await signedPhotoUrl(v.idDocumentPhotoBase64),
+      })),
+    );
+    const signedById = new Map(signed.map((s) => [s.id, s]));
+
     return {
       data: rows.map((v) => ({
         id: v.id,
         accountId: v.accountId,
         status: v.status,
-        facePhoto: v.facePhotoBase64,
-        idDocumentPhoto: v.idDocumentPhotoBase64,
+        facePhoto: signedById.get(v.id)?.facePhoto ?? null,
+        idDocumentPhoto: signedById.get(v.id)?.idDocumentPhoto ?? null,
         // Approving identity (this row) and publishing the store page
         // (ProviderProfile — bio + price both set) are independent —
         // this flags a verified/approved paseador who still hasn't
@@ -183,6 +200,52 @@ export class AdminController {
     profile.setPlan(dto.plan);
     await this.providerProfiles.save(profile);
     return { data: { accountId: profile.accountId, plan: profile.plan } };
+  }
+
+  /**
+   * One-off cleanup for the identity photos uploaded before private
+   * storage existed: those sit on the public blob store, where anyone
+   * holding the URL can open a provider's face and ID document. This
+   * moves each one into private storage and deletes the public original.
+   *
+   * Idempotent — rows already private, or still holding inline base64,
+   * are counted as skipped and left alone. Each row is handled on its
+   * own, so one unreachable object doesn't abort the rest; the response
+   * says exactly what happened.
+   */
+  @Post('provider-verifications/secure-legacy-photos')
+  async secureLegacyPhotos(@CurrentAccount() account: AuthenticatedAccount) {
+    assertAdmin(account);
+    const rows = await this.verifications.find();
+    let moved = 0;
+    let skipped = 0;
+    const failed: string[] = [];
+
+    for (const row of rows) {
+      const needsWork =
+        classifyStoredPhoto(row.facePhotoBase64) === 'public' ||
+        classifyStoredPhoto(row.idDocumentPhotoBase64) === 'public';
+      if (!needsWork) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        row.facePhotoBase64 = await moveToPrivateStorage(
+          row.facePhotoBase64,
+          'verifications',
+        );
+        row.idDocumentPhotoBase64 = await moveToPrivateStorage(
+          row.idDocumentPhotoBase64,
+          'verifications',
+        );
+        await this.verifications.save(row);
+        moved += 1;
+      } catch {
+        failed.push(row.id);
+      }
+    }
+
+    return { data: { total: rows.length, moved, skipped, failed } };
   }
 
   /** The activation codes an admin has issued, newest first. */

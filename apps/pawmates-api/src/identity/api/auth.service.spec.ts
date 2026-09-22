@@ -20,6 +20,12 @@ import { ProviderProfile } from '../../providers/domain/entities/provider-profil
 jest.mock('@pawmates/common', () => ({
   ...jest.requireActual('@pawmates/common'),
   uploadBase64Photo: jest.fn((dataUrl: string) => Promise.resolve(`https://blob.test/${dataUrl}`)),
+  // The verification photos go to private storage, which stores a
+  // pathname rather than a URL — that difference is the point, so the
+  // fake mirrors it.
+  uploadPrivateBase64Photo: jest.fn((dataUrl: string, folder: string) =>
+    Promise.resolve(`${folder}/${dataUrl}.jpg`),
+  ),
 }));
 
 describe('AuthService', () => {
@@ -132,10 +138,13 @@ describe('AuthService', () => {
         idDocumentPhoto: 'id-b64',
       });
 
+      // A pathname, not an https URL: these went to private storage, and
+      // persisting a URL for them would be persisting something anyone
+      // could open (see private-blob-storage.ts).
       expect(verifications.save).toHaveBeenCalledWith(
         expect.objectContaining({
-          facePhotoBase64: 'https://blob.test/face-b64',
-          idDocumentPhotoBase64: 'https://blob.test/id-b64',
+          facePhotoBase64: 'verifications/face-b64.jpg',
+          idDocumentPhotoBase64: 'verifications/id-b64.jpg',
           status: 'pending',
         }),
       );

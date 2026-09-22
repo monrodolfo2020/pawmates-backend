@@ -6,6 +6,7 @@ import {
   sendVerificationEmail,
   sendPasswordResetEmail,
   uploadBase64Photo,
+  uploadPrivateBase64Photo,
 } from '@pawmates/common';
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -146,8 +147,14 @@ export class AuthService {
     if (existing) return; // already on file — don't overwrite a pending/verified record here
     const verification = new ProviderVerification();
     verification.accountId = accountId;
-    verification.facePhotoBase64 = await uploadBase64Photo(facePhoto, 'verifications');
-    verification.idDocumentPhotoBase64 = await uploadBase64Photo(idDocumentPhoto, 'verifications');
+    // Private storage, not the public one every other photo uses: these
+    // two are a face and an official ID document, and the only reader is
+    // the admin reviewing them (see private-blob-storage.ts).
+    verification.facePhotoBase64 = await uploadPrivateBase64Photo(facePhoto, 'verifications');
+    verification.idDocumentPhotoBase64 = await uploadPrivateBase64Photo(
+      idDocumentPhoto,
+      'verifications',
+    );
     verification.status = 'pending';
     await this.verifications.save(verification);
   }
