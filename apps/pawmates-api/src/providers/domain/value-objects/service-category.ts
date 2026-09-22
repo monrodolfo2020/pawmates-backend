@@ -6,6 +6,11 @@
  * with a contact button instead, since there's no booking pipeline for
  * a vet appointment or a grooming slot yet.
  *
+ * 'shop' was here and was removed: a store's page is mostly a product
+ * catalogue, which is a different product from a services listing and
+ * was more than a shop owner could reasonably fill in. Rows that had it
+ * were moved to 'other' (see RemoveShopCategory).
+ *
  * Must stay in sync with SERVICE_CATEGORIES in the frontend's
  * api/client.ts (same manual-sync convention as
  * MEET_GREET_SERVICE_TYPE_CODE).
@@ -16,7 +21,6 @@ export const SERVICE_CATEGORIES = [
   'grooming',
   'boarding',
   'training',
-  'shop',
   'other',
 ] as const;
 
