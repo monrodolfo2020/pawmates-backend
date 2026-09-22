@@ -272,6 +272,32 @@ describe('AuthService', () => {
     });
   });
 
+  it('creates nothing at all when the verification upload fails', async () => {
+    // This is what left accounts that could log in but had no
+    // verification and no business page, and couldn't sign up again
+    // because the email was taken: the account used to be written first.
+    const common = jest.requireMock('@pawmates/common') as {
+      uploadPrivateBase64Photo: jest.Mock;
+    };
+    common.uploadPrivateBase64Photo.mockRejectedValueOnce(new Error('storage down'));
+    accounts.findOne.mockResolvedValue(null);
+
+    await expect(
+      service.signup({
+        acceptedLegal: ACCEPTED,
+        email: 'roto@test.app',
+        password: 'password123',
+        role: 'provider',
+        facePhoto: 'face-b64',
+        idDocumentPhoto: 'id-b64',
+      }),
+    ).rejects.toThrow();
+
+    expect(accounts.save).not.toHaveBeenCalled();
+    expect(verifications.save).not.toHaveBeenCalled();
+    expect(providerProfiles.save).not.toHaveBeenCalled();
+  });
+
   describe('addRole', () => {
     it('appends a new role to an existing account', async () => {
       const account = new Account();

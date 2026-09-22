@@ -4,8 +4,10 @@ import {
   Money,
   ResourceNotFoundError,
   RoleRequiredError,
+  ValidationError,
   isDataUrl,
   uploadBase64Photo,
+  uploadPrivateBase64Photo,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
@@ -17,6 +19,12 @@ import { ProviderProfile } from '../domain/entities/provider-profile.entity';
 import { SERVICE_CATEGORIES, slugify } from '../domain/value-objects/service-category';
 import type { ServiceCategory } from '../domain/value-objects/service-category';
 import { SaveProviderProfileDto } from './dto/save-provider-profile.dto';
+import { SubmitVerificationDto } from './dto/submit-verification.dto';
+import { LegalAcceptance } from '../../identity/domain/entities/legal-acceptance.entity';
+import {
+  LEGAL_DOCUMENT_VERSIONS,
+  isCurrentVersion,
+} from '../../identity/domain/value-objects/legal-document';
 
 /**
  * The pet-services directory: every business's listing plus its
@@ -32,6 +40,8 @@ export class ProvidersController {
     @InjectRepository(Account) private readonly accounts: Repository<Account>,
     @InjectRepository(ProviderVerification)
     private readonly verifications: Repository<ProviderVerification>,
+    @InjectRepository(LegalAcceptance)
+    private readonly legalAcceptances: Repository<LegalAcceptance>,
   ) {}
 
   /** Public directory — only published profiles, optionally narrowed to
@@ -184,6 +194,90 @@ export class ProvidersController {
 
   /** The shareable micro-page's own endpoint. Must be declared before
    * `:accountId` below, or Nest would match "by-slug" as an account id. */
+  /**
+   * Where this provider's verification stands. Separate from GET me
+   * because that returns null when the business hasn't created its page
+   * yet, and the verification card has to show either way — an account
+   * whose signup half-failed has neither, and needs to be told so.
+   */
+  @Get('me/verification')
+  @UseGuards(JwtAuthGuard)
+  async myVerification(@CurrentAccount() account: AuthenticatedAccount) {
+    assertProvider(account);
+    const row = await this.verifications.findOne({
+      where: { accountId: account.accountId },
+    });
+    return {
+      data: {
+        status: row?.status ?? 'none',
+        submittedAt: row?.createdAt ?? null,
+        photosDeletedAt: row?.photosDeletedAt ?? null,
+        consentVersion: LEGAL_DOCUMENT_VERSIONS.identity_verification_consent,
+      },
+    };
+  }
+
+  /**
+   * Sends the two identity photos for review, after signup.
+   *
+   * Until now verification only existed inside the signup request, so a
+   * provider whose signup half-failed — or who simply wants to try again
+   * with a clearer photo — had no way to be verified at all, and an
+   * admin had nothing to approve. That is the gap this closes.
+   *
+   * Replaces a pending or rejected submission; refuses to touch one that
+   * is already verified, since re-submitting would drop a badge the
+   * business already earned.
+   */
+  @Post('me/verification')
+  @UseGuards(JwtAuthGuard)
+  async submitVerification(
+    @Body() dto: SubmitVerificationDto,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    assertProvider(account);
+    if (!isCurrentVersion('identity_verification_consent', dto.consentVersion)) {
+      throw new ValidationError(
+        'El consentimiento de verificación cambió. Vuelve a cargar la aplicación.',
+      );
+    }
+
+    const existing = await this.verifications.findOne({
+      where: { accountId: account.accountId },
+    });
+    if (existing?.status === 'verified') {
+      throw new ValidationError('Tu identidad ya está verificada.');
+    }
+
+    // Uploaded before anything is written, so a storage failure leaves
+    // no half-updated row behind.
+    const [face, idDocument] = await Promise.all([
+      uploadPrivateBase64Photo(dto.facePhoto, 'verifications'),
+      uploadPrivateBase64Photo(dto.idDocumentPhoto, 'verifications'),
+    ]);
+
+    const verification = existing ?? new ProviderVerification();
+    verification.accountId = account.accountId;
+    verification.facePhotoBase64 = face;
+    verification.idDocumentPhotoBase64 = idDocument;
+    verification.photosDeletedAt = null;
+    verification.status = 'pending';
+    await this.verifications.save(verification);
+
+    await this.legalAcceptances.save(
+      LegalAcceptance.record({
+        accountId: account.accountId,
+        documentType: 'identity_verification_consent',
+        documentVersion: dto.consentVersion,
+      }),
+    ).catch(() => {
+      // Already on file from signup — the unique index says so, and
+      // re-consenting to the same version is not a new fact.
+    });
+
+    return { data: { status: verification.status } };
+  }
+
   @Get('by-slug/:slug')
   async getBySlug(@Param('slug') slug: string) {
     const profile = await this.profiles.findOne({ where: { slug, isPublished: true } });

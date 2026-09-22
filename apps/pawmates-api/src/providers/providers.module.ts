@@ -11,6 +11,7 @@ import { SimulatedBillingAdapter } from './infra/adapters/simulated-billing.adap
 import { ProviderMarketplaceAdapter } from './infra/adapters/provider-marketplace.adapter';
 import { Account } from '../identity/domain/entities/account.entity';
 import { ProviderVerification } from '../identity/domain/entities/provider-verification.entity';
+import { LegalAcceptance } from '../identity/domain/entities/legal-acceptance.entity';
 
 /**
  * Providers Bounded Context — the real Marketplace/provider-directory
@@ -37,6 +38,9 @@ import { ProviderVerification } from '../identity/domain/entities/provider-verif
       PlanActivationCode,
       Account,
       ProviderVerification,
+      // Written when a provider sends its identity photos from inside
+      // the app: that consent has to be recorded like any other.
+      LegalAcceptance,
     ]),
   ],
   controllers: [ProvidersController, BillingController, GeoController],

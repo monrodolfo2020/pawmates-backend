@@ -81,6 +81,20 @@ export class AuthService {
       );
     }
 
+    // Photos go up **before** the account exists. They're the only step
+    // here that depends on something outside this process, and when that
+    // step failed the account had already been written — leaving people
+    // who could log in but had no verification and no business page, and
+    // who couldn't sign up again because their email was taken. Failing
+    // before anything is created means they can simply try again.
+    const verificationPhotos =
+      params.role === 'provider'
+        ? await this.uploadVerificationPhotos(
+            params.facePhoto!,
+            params.idDocumentPhoto!,
+          )
+        : null;
+
     const account = new Account();
     account.email = params.email.toLowerCase();
     account.passwordHash = await bcrypt.hash(params.password, SALT_ROUNDS);
@@ -103,12 +117,8 @@ export class AuthService {
       userAgent: context?.userAgent,
     });
 
-    if (params.role === 'provider') {
-      await this.saveVerification(
-        account.id,
-        params.facePhoto!,
-        params.idDocumentPhoto!,
-      );
+    if (params.role === 'provider' && verificationPhotos) {
+      await this.saveVerification(account.id, verificationPhotos);
       await this.seedProviderProfile(account, params);
     }
 
@@ -166,8 +176,10 @@ export class AuthService {
     if (params.role === 'provider') {
       await this.saveVerification(
         account.id,
-        params.facePhoto!,
-        params.idDocumentPhoto!,
+        await this.uploadVerificationPhotos(
+          params.facePhoto!,
+          params.idDocumentPhoto!,
+        ),
       );
       await this.seedProviderProfile(account, params);
     }
@@ -175,10 +187,29 @@ export class AuthService {
     return this.issueToken(account);
   }
 
-  private async saveVerification(
-    accountId: string,
+  /**
+   * Private storage, not the public one every other photo uses: these two
+   * are a face and an official ID document, and the only reader is the
+   * admin reviewing them (see private-blob-storage.ts).
+   *
+   * In parallel, because each upload has its own timeout before it gives
+   * up and keeps the image inline — in sequence the worst case was twice
+   * as long, on a request that already has a 30-second budget on Vercel.
+   */
+  private async uploadVerificationPhotos(
     facePhoto: string,
     idDocumentPhoto: string,
+  ): Promise<{ face: string; idDocument: string }> {
+    const [face, idDocument] = await Promise.all([
+      uploadPrivateBase64Photo(facePhoto, 'verifications'),
+      uploadPrivateBase64Photo(idDocumentPhoto, 'verifications'),
+    ]);
+    return { face, idDocument };
+  }
+
+  private async saveVerification(
+    accountId: string,
+    photos: { face: string; idDocument: string },
   ): Promise<void> {
     const existing = await this.verifications.findOne({
       where: { accountId },
@@ -186,20 +217,8 @@ export class AuthService {
     if (existing) return; // already on file — don't overwrite a pending/verified record here
     const verification = new ProviderVerification();
     verification.accountId = accountId;
-    // Private storage, not the public one every other photo uses: these
-    // two are a face and an official ID document, and the only reader is
-    // the admin reviewing them (see private-blob-storage.ts).
-    //
-    // In parallel, because each upload has its own timeout before it
-    // gives up and keeps the image inline — doing them in sequence made
-    // the worst case twice as long, on a request that already has a
-    // 30-second budget on Vercel.
-    const [storedFace, storedIdDocument] = await Promise.all([
-      uploadPrivateBase64Photo(facePhoto, 'verifications'),
-      uploadPrivateBase64Photo(idDocumentPhoto, 'verifications'),
-    ]);
-    verification.facePhotoBase64 = storedFace;
-    verification.idDocumentPhotoBase64 = storedIdDocument;
+    verification.facePhotoBase64 = photos.face;
+    verification.idDocumentPhotoBase64 = photos.idDocument;
     verification.status = 'pending';
     await this.verifications.save(verification);
   }
