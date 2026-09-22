@@ -223,3 +223,24 @@ export async function moveToPrivateStorage(
   }
   return stored;
 }
+
+/**
+ * Deletes a stored image, whatever shape it was kept in. Inline base64
+ * needs nothing done — clearing the column is the deletion — while a
+ * blob has to be removed from its store.
+ *
+ * Never throws: the caller clears the column either way, and a row still
+ * pointing at an image we meant to destroy is worse than an orphaned
+ * object.
+ */
+export async function deleteStoredPhoto(value: string | null): Promise<void> {
+  if (!value) return;
+  const kind = classifyStoredPhoto(value);
+  if (kind === 'data') return;
+  try {
+    const token = kind === 'private' ? privateStoreToken() : undefined;
+    await del(value, token ? { token } : undefined);
+  } catch {
+    // Best effort by design — see the note above.
+  }
+}

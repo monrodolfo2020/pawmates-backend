@@ -214,6 +214,52 @@ describe('ProviderProfile aggregate', () => {
     });
   });
 
+  describe('location', () => {
+    it('starts without a location', () => {
+      const profile = ProviderProfile.draft('account-1');
+      expect(profile.latitude).toBeNull();
+      expect(profile.longitude).toBeNull();
+    });
+
+    it('stores a point picked off a map search', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.update({ latitude: 19.4126, longitude: -99.1732 });
+      expect(profile.latitude).toBeCloseTo(19.4126);
+      expect(profile.longitude).toBeCloseTo(-99.1732);
+    });
+
+    it('clears the location when both are set to null', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.update({ latitude: 19.4126, longitude: -99.1732 });
+      profile.update({ latitude: null, longitude: null });
+      expect(profile.latitude).toBeNull();
+      expect(profile.longitude).toBeNull();
+    });
+
+    it('refuses half a coordinate — a point nowhere is worse than no point', () => {
+      const profile = ProviderProfile.draft('account-1');
+      expect(() => profile.update({ latitude: 19.4126 })).toThrow(ValidationError);
+      expect(() => profile.update({ longitude: -99.1732 })).toThrow(ValidationError);
+      expect(profile.latitude).toBeNull();
+    });
+
+    it('rejects coordinates outside the globe', () => {
+      const profile = ProviderProfile.draft('account-1');
+      expect(() => profile.update({ latitude: 91, longitude: 0 })).toThrow(ValidationError);
+      expect(() => profile.update({ latitude: 0, longitude: 181 })).toThrow(ValidationError);
+      expect(() => profile.update({ latitude: Number.NaN, longitude: 0 })).toThrow(
+        ValidationError,
+      );
+    });
+
+    it('leaves the location alone when neither is mentioned', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.update({ latitude: 19.4126, longitude: -99.1732 });
+      profile.update({ bio: 'Otra cosa' });
+      expect(profile.latitude).toBeCloseTo(19.4126);
+    });
+  });
+
   describe('paid VIP and expiry', () => {
     const march = new Date('2026-03-10T12:00:00Z');
 

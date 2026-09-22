@@ -180,6 +180,17 @@ export class ProviderProfile {
   @Column({ type: 'text', nullable: true })
   phone!: string | null;
 
+  /** Where the business is, once it has picked itself off a map search
+   * (see GeoController). Optional: a paseador works across a zone rather
+   * than at an address, and a business can publish without it. Its only
+   * job today is making the page's "Cómo llegar" exact instead of a text
+   * search, so a wrong pin is worse than no pin. */
+  @Column({ type: 'real', nullable: true })
+  latitude!: number | null;
+
+  @Column({ type: 'real', nullable: true })
+  longitude!: number | null;
+
   @Column({ name: 'is_published', type: 'boolean', default: false })
   isPublished!: boolean;
 
@@ -315,6 +326,8 @@ export class ProviderProfile {
     profile.priceAmount = null;
     profile.priceCurrency = null;
     profile.plansOffered = null;
+    profile.latitude = null;
+    profile.longitude = null;
     profile.walkingSpots = null;
     profile.address = null;
     profile.idNumber = null;
@@ -341,6 +354,8 @@ export class ProviderProfile {
     photo?: string | null;
     price?: Money | null;
     plansOffered?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
     walkingSpots?: string | null;
     address?: string | null;
     idNumber?: string | null;
@@ -396,6 +411,29 @@ export class ProviderProfile {
       this.priceAmount = params.price?.amount ?? null;
       this.priceCurrency = params.price?.currency ?? null;
     }
+    // Latitude and longitude move together: half a coordinate is a point
+    // nowhere, so passing one without the other is refused rather than
+    // silently stored.
+    if (params.latitude !== undefined || params.longitude !== undefined) {
+      const lat = params.latitude ?? null;
+      const lon = params.longitude ?? null;
+      if ((lat === null) !== (lon === null)) {
+        throw new ValidationError(
+          'La ubicación necesita latitud y longitud, o ninguna de las dos.',
+        );
+      }
+      if (lat !== null && lon !== null) {
+        if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+          throw new ValidationError('Esa latitud no es válida.');
+        }
+        if (!Number.isFinite(lon) || lon < -180 || lon > 180) {
+          throw new ValidationError('Esa longitud no es válida.');
+        }
+      }
+      this.latitude = lat;
+      this.longitude = lon;
+    }
+
     if (params.plansOffered !== undefined) {
       if (params.plansOffered !== null) {
         assertLongFieldValid('Los planes y servicios', params.plansOffered);

@@ -2,9 +2,11 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsNumber,
   IsObject,
   IsOptional,
   IsString,
+  Max,
   Min,
 } from 'class-validator';
 import { SERVICE_CATEGORIES } from '../../domain/value-objects/service-category';
@@ -107,4 +109,18 @@ export class SaveProviderProfileDto {
   @IsString()
   @IsOptional()
   phone?: string;
+
+  /** Where the business is. Both or neither — see ProviderProfile.update.
+   * null clears the location. */
+  @IsOptional()
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  latitude?: number | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  longitude?: number | null;
 }

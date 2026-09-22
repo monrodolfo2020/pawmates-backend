@@ -25,11 +25,21 @@ export class ProviderVerification {
   @Column({ name: 'account_id', type: 'text', unique: true })
   accountId!: string;
 
-  @Column({ name: 'face_photo_base64', type: 'text' })
-  facePhotoBase64!: string;
+  /** Nullable because the images are **deleted once the verification is
+   * resolved**: what has to survive is the decision and its date, not a
+   * face and an official ID sitting in storage indefinitely. Holding
+   * them longer is hard to justify against the proportionality
+   * principle, and is exactly the material a leak would be worst. */
+  @Column({ name: 'face_photo_base64', type: 'text', nullable: true })
+  facePhotoBase64!: string | null;
 
-  @Column({ name: 'id_document_photo_base64', type: 'text' })
-  idDocumentPhotoBase64!: string;
+  @Column({ name: 'id_document_photo_base64', type: 'text', nullable: true })
+  idDocumentPhotoBase64!: string | null;
+
+  /** When the two images were destroyed, which is the record that
+   * replaces them. */
+  @Column({ name: 'photos_deleted_at', type: 'datetime', nullable: true })
+  photosDeletedAt!: Date | null;
 
   @Column({ type: 'text', default: 'pending' })
   status!: VerificationStatus;

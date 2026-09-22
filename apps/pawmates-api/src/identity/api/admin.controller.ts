@@ -21,6 +21,7 @@ import { Product } from '../../commerce/domain/entities/product.entity';
 import { Storefront } from '../../commerce/domain/entities/storefront.entity';
 import { UpdateCatalogItemDto } from '../../commerce/api/dto/update-catalog-item.dto';
 import { UpdateProviderVerificationDto } from './dto/update-provider-verification.dto';
+import { deleteStoredPhoto } from '@pawmates/common';
 import { UpdateBusinessPlanDto } from './dto/update-business-plan.dto';
 import { CreatePlanCodeDto } from '../../providers/api/dto/create-plan-code.dto';
 import { PlanActivationCode } from '../../providers/domain/entities/plan-activation-code.entity';
@@ -99,8 +100,10 @@ export class AdminController {
     const signed = await Promise.all(
       rows.map(async (v) => ({
         id: v.id,
-        facePhoto: await signedPhotoUrl(v.facePhotoBase64),
-        idDocumentPhoto: await signedPhotoUrl(v.idDocumentPhotoBase64),
+        facePhoto: v.facePhotoBase64 ? await signedPhotoUrl(v.facePhotoBase64) : null,
+        idDocumentPhoto: v.idDocumentPhotoBase64
+          ? await signedPhotoUrl(v.idDocumentPhotoBase64)
+          : null,
       })),
     );
     const signedById = new Map(signed.map((s) => [s.id, s]));
@@ -118,6 +121,7 @@ export class AdminController {
         // finished their page, the thing that actually makes them show
         // up in the shopper-facing directory.
         profilePublished: publishedIds.has(v.accountId),
+        photosDeletedAt: v.photosDeletedAt,
         createdAt: v.createdAt,
       })),
     };
@@ -141,12 +145,17 @@ export class AdminController {
       throw new ResourceNotFoundError(`Verificación ${id} no existe.`);
     }
     verification.status = dto.status;
+    // The images existed for this decision and nothing else, so the
+    // decision is where they stop. What survives is the outcome and its
+    // date — see ProviderVerification's comment.
+    await deletePhotosOf(verification);
     await this.verifications.save(verification);
     return {
       data: {
         id: verification.id,
         accountId: verification.accountId,
         status: verification.status,
+        photosDeletedAt: verification.photosDeletedAt,
         createdAt: verification.createdAt,
       },
     };
@@ -223,21 +232,27 @@ export class AdminController {
 
     for (const row of rows) {
       const needsWork =
-        classifyStoredPhoto(row.facePhotoBase64) === 'public' ||
-        classifyStoredPhoto(row.idDocumentPhotoBase64) === 'public';
+        (row.facePhotoBase64 !== null &&
+          classifyStoredPhoto(row.facePhotoBase64) === 'public') ||
+        (row.idDocumentPhotoBase64 !== null &&
+          classifyStoredPhoto(row.idDocumentPhotoBase64) === 'public');
       if (!needsWork) {
         skipped += 1;
         continue;
       }
       try {
-        row.facePhotoBase64 = await moveToPrivateStorage(
-          row.facePhotoBase64,
-          'verifications',
-        );
-        row.idDocumentPhotoBase64 = await moveToPrivateStorage(
-          row.idDocumentPhotoBase64,
-          'verifications',
-        );
+        if (row.facePhotoBase64) {
+          row.facePhotoBase64 = await moveToPrivateStorage(
+            row.facePhotoBase64,
+            'verifications',
+          );
+        }
+        if (row.idDocumentPhotoBase64) {
+          row.idDocumentPhotoBase64 = await moveToPrivateStorage(
+            row.idDocumentPhotoBase64,
+            'verifications',
+          );
+        }
         await this.verifications.save(row);
         moved += 1;
       } catch {
@@ -413,4 +428,20 @@ export class AdminController {
       },
     };
   }
+}
+
+/**
+ * Destroys both identity images and records when. Best effort on the
+ * storage side: if the object can't be deleted the column is cleared
+ * anyway, because a row still pointing at an image we meant to destroy
+ * is the worse of the two failures.
+ */
+async function deletePhotosOf(verification: ProviderVerification): Promise<void> {
+  await Promise.all([
+    deleteStoredPhoto(verification.facePhotoBase64),
+    deleteStoredPhoto(verification.idDocumentPhotoBase64),
+  ]);
+  verification.facePhotoBase64 = null;
+  verification.idDocumentPhotoBase64 = null;
+  verification.photosDeletedAt = new Date();
 }
