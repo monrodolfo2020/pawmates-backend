@@ -87,7 +87,7 @@ export class BookingProcessManager {
     });
     if (!availability.available) {
       throw new ValidationError(
-        'El proveedor no tiene disponibilidad en ese horario.',
+        'Este negocio no está recibiendo solicitudes por ahora.',
       );
     }
 
@@ -130,7 +130,9 @@ export class BookingProcessManager {
     const rate = isMeetGreet ? zero : availability.rate;
     const commission = isMeetGreet ? zero : availability.commission;
     const tax = isMeetGreet ? zero : availability.tax;
-    const tipEstimate = isMeetGreet ? zero : availability.rate.multiply(0.15);
+    // Tips are between the owner and the business, paid however they
+    // agree — the app doesn't invent one (Términos para dueños, §8).
+    const tipEstimate = zero;
     const total = isMeetGreet ? zero : rate.add(commission).add(tax).add(tipEstimate);
     const priceBreakdown = PriceBreakdown.create({
       bookingId: booking.id,

@@ -42,21 +42,9 @@ import { LogWalkEventDto } from './dto/log-walk-event.dto';
  * `completed`) from the same underlying data, since a route/photo log is
  * just as valid mid-walk as after it — no separate "live" endpoint.
  *
- * start/complete/locations/events only require being authenticated, not
- * specifically the booking's assigned provider — matching
- * BookingController's accept/reject/cancel, which have the same gap.
- * This used to be unavoidable: the old fake Marketplace adapter resolved
- * every booking to whatever id the client sent, so no real signed-up
- * provider account could ever pass a strict identity check, and
- * enforcing one here would have made the feature untestable through the
- * app itself. That's no longer true — ProviderMarketplaceAdapter now
- * resolves bookings to real ProviderProfile-backed accounts (see its
- * comment) — so a strict `booking.providerId === account.accountId`
- * check is finally meaningful here. Left as-is in this pass to keep the
- * "real provider directory" change isolated from a "who can operate on
- * a booking" security change; still worth tightening as a deliberate
- * follow-up. GET still checks the caller is a real participant
- * (owner/provider/admin), since that was never affected by this gap.
+ * start/complete/locations/events are the business doing the walk, so
+ * only the booking's own provider may call them; GET is open to either
+ * side (and an admin), since the owner is the one watching.
  */
 @Controller('v1/trips')
 @UseGuards(JwtAuthGuard)
@@ -72,7 +60,11 @@ export class TripsController {
   ) {}
 
   @Post(':bookingId/start')
-  async start(@Param('bookingId') bookingId: string) {
+  async start(
+    @Param('bookingId') bookingId: string,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    this.assertIsProvider(await this.loadOrThrow(bookingId), account);
     await this.bookingProcessManager.markInProgress(bookingId);
     return { data: { status: 'started' } };
   }
@@ -80,8 +72,10 @@ export class TripsController {
   @Post(':bookingId/complete')
   async complete(
     @Param('bookingId') bookingId: string,
+    @CurrentAccount() account: AuthenticatedAccount,
     @Headers('x-trace-id') traceId: string | undefined,
   ) {
+    this.assertIsProvider(await this.loadOrThrow(bookingId), account);
     const trace = traceId ?? ulid().toLowerCase();
     await this.bookingProcessManager.completeService(bookingId, trace);
     // Was a separate consumer reacting to booking.events/WalkFinished —
@@ -94,8 +88,10 @@ export class TripsController {
   async logLocation(
     @Param('bookingId') bookingId: string,
     @Body() dto: LogLocationDto,
+    @CurrentAccount() account: AuthenticatedAccount,
   ) {
     const booking = await this.loadOrThrow(bookingId);
+    this.assertIsProvider(booking, account);
     this.assertInProgress(booking);
     const point = TripLocation.record(
       bookingId,
@@ -111,8 +107,10 @@ export class TripsController {
   async logEvent(
     @Param('bookingId') bookingId: string,
     @Body() dto: LogWalkEventDto,
+    @CurrentAccount() account: AuthenticatedAccount,
   ) {
     const booking = await this.loadOrThrow(bookingId);
+    this.assertIsProvider(booking, account);
     this.assertInProgress(booking);
     const event = WalkEvent.log({
       bookingId,
@@ -189,6 +187,12 @@ export class TripsController {
       !account.roles.includes('admin')
     ) {
       throw new RoleRequiredError('No tienes acceso a este paseo.');
+    }
+  }
+
+  private assertIsProvider(booking: Booking, account: AuthenticatedAccount): void {
+    if (booking.providerId !== account.accountId) {
+      throw new RoleRequiredError('Solo quien hace el paseo puede registrarlo.');
     }
   }
 

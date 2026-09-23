@@ -1,14 +1,13 @@
 import { Money } from '@pawmates/common';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import type {
   AvailabilityCheck,
   MarketplacePort,
 } from '../../../booking/domain/ports/marketplace.port';
 import { ProviderProfile } from '../../domain/entities/provider-profile.entity';
 
-const COMMISSION_RATE = 0.15; // matches the flat 15% the old fake adapter used
 
 /**
  * The real MarketplacePort implementation (see ProviderProfile's
@@ -34,8 +33,14 @@ export class ProviderMarketplaceAdapter implements MarketplacePort {
   async checkAvailability(params: {
     providerServiceId: string;
   }): Promise<AvailabilityCheck> {
+    // Same bar as the public directory: a business the admin hasn't
+    // approved yet can't be found there, so it can't be booked either.
     const profile = await this.profiles.findOne({
-      where: { accountId: params.providerServiceId, isPublished: true },
+      where: {
+        accountId: params.providerServiceId,
+        isPublished: true,
+        approvedAt: Not(IsNull()),
+      },
     });
     if (!profile || !profile.price) {
       return {
@@ -50,7 +55,10 @@ export class ProviderMarketplaceAdapter implements MarketplacePort {
       available: true,
       providerId: profile.accountId,
       rate: profile.price,
-      commission: profile.price.multiply(COMMISSION_RATE),
+      // PawMates charges businesses a subscription, never a cut of their
+      // work (Acuerdo de prestadores, cláusula 3.3) — a booking carries
+      // the business's own rate and nothing on top.
+      commission: Money.zero(profile.price.currency),
       tax: Money.zero(profile.price.currency),
     };
   }

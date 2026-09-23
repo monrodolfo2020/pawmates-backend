@@ -3,6 +3,7 @@ import {
   IdempotencyInterceptor,
   JwtAuthGuard,
   RoleRequiredError,
+  ValidationError,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import {
@@ -36,6 +37,10 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { CreateRecurringBookingDto } from './dto/create-recurring-booking.dto';
 import { SendMessageDto } from './dto/send-message.dto';
 
+/** A few minutes of slack so "right now" from a phone whose clock runs
+ * a little behind isn't refused as being in the past. */
+const PAST_TOLERANCE_MS = 5 * 60 * 1000;
+
 /** Mirrors API Design doc §04 (owner-bff) and §05 (provider-bff) Booking endpoints. */
 @Controller('v1/bookings')
 @UseGuards(JwtAuthGuard)
@@ -57,11 +62,15 @@ export class BookingController {
     @Headers('idempotency-key') idempotencyKey: string,
     @Headers('x-trace-id') traceId: string | undefined,
   ) {
+    const scheduledAt = dto.scheduledAt ? new Date(dto.scheduledAt) : new Date();
+    if (scheduledAt.getTime() < Date.now() - PAST_TOLERANCE_MS) {
+      throw new ValidationError('Elige una fecha y hora que todavía no hayan pasado.');
+    }
     const booking = await this.processManager.createBooking(
       {
         ownerId: account.accountId,
         providerServiceId: dto.providerServiceId,
-        scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : new Date(),
+        scheduledAt,
         idempotencyKey,
         lines: dto.lines,
       },
@@ -196,11 +205,15 @@ export class BookingController {
   }
 
   @Get(':id')
-  async getOne(@Param('id') id: string) {
+  async getOne(
+    @Param('id') id: string,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
     const booking = await this.bookings.findOneOrFail({
       where: { id },
       relations: ['lines', 'priceBreakdown'],
     });
+    assertParticipant(booking, account);
     const enrichment = await this.loadEnrichment([booking]);
     return { data: toBookingResponse(booking, enrichment) };
   }
@@ -256,11 +269,9 @@ export class BookingController {
     return { data: toBookingResponse(booking) };
   }
 
-  /** accept/reject are the paseador deciding on a request addressed to
-   * them — unlike list()/messages above (which key off activeContext,
-   * see this controller's header comment on that looseness), a wrong or
-   * malicious accountId here would let anyone confirm or cancel someone
-   * else's booking, so this checks the booking's actual providerId. */
+  /** accept/reject are the business deciding on a request addressed to
+   * them, so it has to be the booking's own provider — not just either
+   * participant, as assertParticipant allows. */
   private async assertProviderOwnsBooking(
     id: string,
     account: AuthenticatedAccount,
@@ -279,6 +290,9 @@ export class BookingController {
     @CurrentAccount() account: AuthenticatedAccount,
     @Headers('x-trace-id') traceId: string | undefined,
   ) {
+    assertParticipant(await this.bookings.findOneOrFail({ where: { id } }), account, {
+      allowAdmin: false,
+    });
     const booking = await this.processManager.cancelBooking(
       id,
       account.accountId,
@@ -294,6 +308,9 @@ export class BookingController {
     @Body() dto: RescheduleBookingDto,
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
+    assertParticipant(await this.bookings.findOneOrFail({ where: { id } }), account, {
+      allowAdmin: false,
+    });
     await this.processManager.requestReschedule(
       id,
       new Date(dto.proposedStart),
@@ -307,13 +324,8 @@ export class BookingController {
    * WebSocket gateway in this consolidated MVP, same reasoning as the
    * live-trip map polling GET /v1/trips/:id (see that controller).
    *
-   * senderRole comes from activeContext (the same header/mode-toggle
-   * `list()` above already keys off of), not a strict participant check
-   * against this booking's own owner_id/provider_id — matching
-   * accept/reject/cancel and the trip endpoints' existing looseness (see
-   * TripsController's comment: that gap predates the real Marketplace
-   * and is now meaningful to close, just not done in the same pass that
-   * introduced it).
+   * Only the booking's owner and business can read or write the thread
+   * (an admin can read it, for disputes, but never post into it).
    */
   @Post(':id/messages')
   async sendMessage(
@@ -321,17 +333,21 @@ export class BookingController {
     @Body() dto: SendMessageDto,
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
+    const booking = await this.bookings.findOneOrFail({ where: { id } });
+    assertParticipant(booking, account, { allowAdmin: false });
     const message = BookingMessage.send({
       bookingId: id,
       senderId: account.accountId,
-      senderRole: account.activeContext,
+      // Which side of *this* booking you are, not which mode your app is
+      // in — someone who both owns a dog and walks dogs is one or the
+      // other here, never both.
+      senderRole: booking.ownerId === account.accountId ? 'owner' : 'provider',
       text: dto.text,
     });
     await this.messages.save(message);
 
     // Bumps last_message_at for the "unread" badge on the other side, and
     // counts sending as reading your own message so it never flags itself.
-    const booking = await this.bookings.findOneOrFail({ where: { id } });
     booking.lastMessageAt = message.sentAt;
     this.markReadFor(booking, account.accountId, message.sentAt);
     await this.bookings.save(booking);
@@ -345,13 +361,7 @@ export class BookingController {
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
     const booking = await this.bookings.findOneOrFail({ where: { id } });
-    if (
-      booking.ownerId !== account.accountId &&
-      booking.providerId !== account.accountId &&
-      !account.roles.includes('admin')
-    ) {
-      throw new RoleRequiredError('No tienes acceso a esta conversación.');
-    }
+    assertParticipant(booking, account);
     const rows = await this.messages.find({
       where: { bookingId: id },
       order: { sentAt: 'ASC' },
@@ -442,4 +452,17 @@ function toBookingResponse(
         }
       : null,
   };
+}
+
+/** Only the two sides of a booking may act on it. An admin may look
+ * (disputes), but acting — cancelling, rescheduling, writing — is left to
+ * the people the booking is actually between. */
+function assertParticipant(
+  booking: Booking,
+  account: AuthenticatedAccount,
+  { allowAdmin = true }: { allowAdmin?: boolean } = {},
+): void {
+  if (booking.ownerId === account.accountId || booking.providerId === account.accountId) return;
+  if (allowAdmin && account.roles.includes('admin')) return;
+  throw new RoleRequiredError('Esta reserva no te pertenece.');
 }

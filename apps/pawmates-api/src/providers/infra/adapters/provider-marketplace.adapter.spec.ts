@@ -17,7 +17,16 @@ describe('ProviderMarketplaceAdapter', () => {
     expect(result.available).toBe(false);
   });
 
-  it('resolves rate and a 15% commission from the published profile', async () => {
+  it('only looks up approved, published profiles', async () => {
+    const repo = fakeRepo(null);
+    const adapter = new ProviderMarketplaceAdapter(repo);
+    await adapter.checkAvailability({ providerServiceId: 'p' } as any);
+    const where = repo.findOne.mock.calls[0][0].where;
+    expect(where.isPublished).toBe(true);
+    expect(where.approvedAt).toBeDefined();
+  });
+
+  it('resolves the rate from the published profile, with no commission on top', async () => {
     const profile = ProviderProfile.draft('provider-1');
     profile.update({ bio: 'Bio', price: Money.of(85000, 'MXN') });
     const adapter = new ProviderMarketplaceAdapter(fakeRepo(profile));
@@ -31,6 +40,6 @@ describe('ProviderMarketplaceAdapter', () => {
     expect(result.available).toBe(true);
     expect(result.providerId).toBe('provider-1');
     expect(result.rate.equals(Money.of(85000, 'MXN'))).toBe(true);
-    expect(result.commission.equals(Money.of(12750, 'MXN'))).toBe(true);
+    expect(result.commission.equals(Money.zero('MXN'))).toBe(true);
   });
 });
