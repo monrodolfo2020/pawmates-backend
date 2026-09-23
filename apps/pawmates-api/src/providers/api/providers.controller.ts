@@ -8,11 +8,13 @@ import {
   isDataUrl,
   uploadBase64Photo,
   uploadPrivateBase64Photo,
+  micrositeQrPng,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import type { Response } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Not, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 import { Account } from '../../identity/domain/entities/account.entity';
 import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../domain/entities/provider-profile.entity';
@@ -50,10 +52,13 @@ export class ProvidersController {
   @Get()
   async list(@Query('category') category?: string) {
     const isKnownCategory = SERVICE_CATEGORIES.includes(category as ServiceCategory);
+    // Complete *and* approved: a business waiting for an admin's
+    // approval can prepare its page, but doesn't appear here yet.
+    const visible = { isPublished: true, approvedAt: Not(IsNull()) };
     const rows = await this.profiles.find({
       where: isKnownCategory
-        ? { isPublished: true, category: category as ServiceCategory }
-        : { isPublished: true },
+        ? { ...visible, category: category as ServiceCategory }
+        : visible,
       order: { createdAt: 'DESC' },
     });
     const accountIds = rows.map((r) => r.accountId);
@@ -61,9 +66,9 @@ export class ProvidersController {
     const verifiedIds = await this.loadVerifiedIds(accountIds);
     // A suspended business drops out of the directory without being
     // unpublished, so re-enabling it brings the listing straight back.
-    const visible = rows.filter((p) => isActiveAccount(accountById.get(p.accountId)));
+    const listed = rows.filter((p) => isActiveAccount(accountById.get(p.accountId)));
     return {
-      data: visible.map((p) =>
+      data: listed.map((p) =>
         toDirectoryResponse(p, accountById.get(p.accountId), verifiedIds.has(p.accountId)),
       ),
     };
@@ -281,9 +286,36 @@ export class ProvidersController {
     return { data: { status: verification.status } };
   }
 
+  /**
+   * The QR code for a business's page, as a PNG. Served from here rather
+   * than embedded in the email as data because Gmail strips inline data
+   * images; the app uses the same address to show and download it.
+   *
+   * Public, and it only ever encodes our own page address for a slug that
+   * exists, so it can't be used as a general QR generator.
+   */
+  @Get('by-slug/:slug/qr.png')
+  async qr(@Param('slug') slug: string, @Res() res: Response) {
+    if (!/^[a-z0-9-]{1,80}$/.test(slug)) {
+      throw new ResourceNotFoundError('Esa página no existe.');
+    }
+    const exists = await this.profiles.findOne({ where: { slug }, select: { id: true } });
+    if (!exists) {
+      throw new ResourceNotFoundError('Esa página no existe.');
+    }
+    const png = await micrositeQrPng(slug);
+    res.setHeader('Content-Type', 'image/png');
+    // A slug never changes (see resolveSlug), so neither does its code.
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Content-Disposition', `inline; filename="qr-${slug}.png"`);
+    res.send(png);
+  }
+
   @Get('by-slug/:slug')
   async getBySlug(@Param('slug') slug: string) {
-    const profile = await this.profiles.findOne({ where: { slug, isPublished: true } });
+    const profile = await this.profiles.findOne({
+      where: { slug, isPublished: true, approvedAt: Not(IsNull()) },
+    });
     if (!profile) {
       throw new ResourceNotFoundError('Esta página no existe o todavía no está publicada.');
     }
@@ -294,7 +326,9 @@ export class ProvidersController {
    * a shopper hitting a storefront that doesn't exist yet. */
   @Get(':accountId')
   async getPublic(@Param('accountId') accountId: string) {
-    const profile = await this.profiles.findOne({ where: { accountId, isPublished: true } });
+    const profile = await this.profiles.findOne({
+      where: { accountId, isPublished: true, approvedAt: Not(IsNull()) },
+    });
     if (!profile) {
       throw new ResourceNotFoundError('Este negocio todavía no tiene una página publicada.');
     }
@@ -426,6 +460,7 @@ function toOwnResponse(profile: ProviderProfile) {
     age: profile.age,
     phone: profile.phone,
     isPublished: profile.isPublished,
+    approvedAt: profile.approvedAt,
     plan: profile.plan,
     isVip: profile.isVip(),
     planExpiresAt: profile.planExpiresAt,

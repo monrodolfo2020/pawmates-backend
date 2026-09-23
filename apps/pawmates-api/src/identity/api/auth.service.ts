@@ -6,6 +6,7 @@ import {
   ValidationError,
   sendVerificationEmail,
   sendPasswordResetEmail,
+  sendNewBusinessPendingEmail,
   uploadBase64Photo,
   uploadPrivateBase64Photo,
 } from '@pawmates/common';
@@ -29,6 +30,16 @@ import { ProviderProfile } from '../../providers/domain/entities/provider-profil
 // the actual production frontend so a deployment missing this env var
 // still sends a working link instead of a broken one.
 const APP_URL = process.env.APP_URL ?? 'https://pawmates-one.vercel.app';
+
+/** For the admin's email only; the app has its own copy of these. */
+const CATEGORY_LABELS: Record<string, string> = {
+  walker: 'Paseador',
+  vet: 'Veterinaria',
+  grooming: 'Estética canina',
+  boarding: 'Hotel y guardería',
+  training: 'Entrenamiento',
+  other: 'Otro servicio',
+};
 
 const SALT_ROUNDS = 10;
 
@@ -121,6 +132,12 @@ export class AuthService {
     if (params.role === 'provider' && verificationPhotos) {
       await this.saveVerification(account.id, verificationPhotos);
       await this.seedProviderProfile(account, params);
+      // Awaited, because on Vercel work left running after the response
+      // can be frozen before it finishes. It can't fail the signup —
+      // notifyAdminsOfNewBusiness swallows every error and the send has
+      // its own timeout — and the business is in the review queue either
+      // way, whether or not the email lands.
+      await this.notifyAdminsOfNewBusiness(account, params);
     }
 
     // Fire-and-forget — a slow or misconfigured email provider (see
@@ -190,6 +207,7 @@ export class AuthService {
         ),
       );
       await this.seedProviderProfile(account, params);
+      await this.notifyAdminsOfNewBusiness(account, params);
     }
 
     return this.issueToken(account);
@@ -360,6 +378,32 @@ export class AuthService {
       this.logger.warn(
         `No se pudo enviar el correo de verificación a ${account.email}: ${(err as Error).message}`,
       );
+    }
+  }
+
+  private async notifyAdminsOfNewBusiness(
+    account: Account,
+    params: { businessName?: string; category?: string },
+  ): Promise<void> {
+    try {
+      const admins = await this.accounts
+        .createQueryBuilder('a')
+        .where('a.roles LIKE :admin', { admin: '%"admin"%' })
+        .andWhere('a.disabled_at IS NULL')
+        .getMany();
+      const to = admins.map((a) => a.email);
+      if (to.length === 0) return;
+      await sendNewBusinessPendingEmail({
+        to,
+        businessName: params.businessName?.trim() || account.name || account.email,
+        ownerName: account.name,
+        email: account.email,
+        category: CATEGORY_LABELS[params.category ?? 'walker'] ?? 'Otro servicio',
+        adminUrl: `${APP_URL}/admin`,
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('[auth] no se pudo avisar a los administradores', error);
     }
   }
 

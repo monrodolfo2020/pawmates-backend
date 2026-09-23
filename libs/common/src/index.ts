@@ -13,3 +13,6 @@ export * from './storage/blob-storage';
 export * from './storage/private-blob-storage';
 export * from './email/send-verification-email';
 export * from './email/send-password-reset-email';
+export * from './email/send-email';
+export * from './email/business-emails';
+export * from './qr/microsite-qr';

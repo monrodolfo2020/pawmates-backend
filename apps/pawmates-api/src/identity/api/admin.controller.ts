@@ -8,6 +8,9 @@ import {
   isDataUrl,
   moveToPrivateStorage,
   signedPhotoUrl,
+  micrositeQrPng,
+  micrositeUrlFor,
+  sendBusinessApprovedEmail,
   uploadBase64Photo,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
@@ -24,6 +27,7 @@ import { UpdateCatalogItemDto } from '../../commerce/api/dto/update-catalog-item
 import { UpdateProviderVerificationDto } from './dto/update-provider-verification.dto';
 import { deleteStoredPhoto } from '@pawmates/common';
 import { UpdateBusinessPlanDto } from './dto/update-business-plan.dto';
+import { UpdateBusinessApprovalDto } from './dto/update-business-approval.dto';
 import {
   DeleteAccountDto,
   UpdateAccountDto,
@@ -296,9 +300,87 @@ export class AdminController {
         isVip: p.isVip(),
         planExpiresAt: p.planExpiresAt,
         isPublished: p.isPublished,
+        approvedAt: p.approvedAt,
         createdAt: p.createdAt,
       })),
     };
+  }
+
+  /**
+   * Approves a business to appear publicly, or takes the approval back.
+   *
+   * Approving emails the business its link and its QR code. The email is
+   * a consequence of the approval, not a condition for it: the approval
+   * is saved first and stands whether or not the email goes out, and
+   * the response says which happened so the panel can tell the admin to
+   * pass the link on some other way if it didn't.
+   *
+   * Only the transition from waiting to approved sends it, so approving
+   * twice doesn't spam the business.
+   */
+  @Patch('businesses/:accountId/approval')
+  async updateBusinessApproval(
+    @Param('accountId') accountId: string,
+    @Body() dto: UpdateBusinessApprovalDto,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    assertAdmin(account);
+    const profile = await this.providerProfiles.findOne({ where: { accountId } });
+    if (!profile) {
+      throw new ResourceNotFoundError(`El negocio ${accountId} no existe.`);
+    }
+    const wasApproved = profile.approvedAt !== null;
+    profile.approvedAt = dto.approved ? (profile.approvedAt ?? new Date()) : null;
+    await this.providerProfiles.save(profile);
+
+    let email: { sent: boolean; reason?: string } | null = null;
+    if (dto.approved && !wasApproved) {
+      email = await this.emailApprovedBusiness(profile);
+    }
+
+    return {
+      data: {
+        accountId: profile.accountId,
+        approvedAt: profile.approvedAt,
+        isPublished: profile.isPublished,
+        email,
+      },
+    };
+  }
+
+  private async emailApprovedBusiness(
+    profile: ProviderProfile,
+  ): Promise<{ sent: boolean; reason?: string }> {
+    const owner = await this.accounts.findOne({ where: { id: profile.accountId } });
+    if (!owner) return { sent: false, reason: 'La cuenta ya no existe.' };
+    if (!profile.slug) {
+      return {
+        sent: false,
+        reason: 'El negocio todavía no tiene enlace: se crea al guardar su página por primera vez.',
+      };
+    }
+    try {
+      const png = await micrositeQrPng(profile.slug);
+      // Absolute, because it's read by an email client, not by our app.
+      // Falls back to the production backend so the image isn't a broken
+      // relative link when API_URL isn't set; the PNG attachment carries
+      // the code either way.
+      const api = (process.env.API_URL ?? 'https://pawmates-backend-black.vercel.app').replace(
+        /\/$/,
+        '',
+      );
+      const result = await sendBusinessApprovedEmail({
+        to: owner.email,
+        businessName: profile.businessName ?? owner.name ?? 'Tu negocio',
+        pageUrl: micrositeUrlFor(profile.slug),
+        qrImageUrl: `${api}/v1/providers/by-slug/${profile.slug}/qr.png`,
+        qrPngBase64: png.toString('base64'),
+        pageIsLive: profile.isPublished,
+      });
+      return result.sent ? { sent: true } : { sent: false, reason: result.reason };
+    } catch {
+      return { sent: false, reason: 'No se pudo preparar el correo.' };
+    }
   }
 
   /**

@@ -194,6 +194,16 @@ export class ProviderProfile {
   @Column({ name: 'is_published', type: 'boolean', default: false })
   isPublished!: boolean;
 
+  /**
+   * When an admin approved this business to appear publicly; null while
+   * it waits. Separate from `isPublished`, which only says the page has
+   * enough content, and from the account being suspended, which locks the
+   * person out entirely — a business waiting for approval can still sign
+   * in and prepare its page, nobody else can see it yet.
+   */
+  @Column({ name: 'approved_at', type: 'datetime', nullable: true })
+  approvedAt!: Date | null;
+
   @Column({ type: 'text', default: DEFAULT_BUSINESS_PLAN })
   plan!: BusinessPlan;
 
@@ -254,6 +264,11 @@ export class ProviderProfile {
   get effectiveDesign(): PageDesign {
     if (!this.isVip()) return DEFAULT_PAGE_DESIGN;
     return this.designPublished ?? DEFAULT_PAGE_DESIGN;
+  }
+
+  /** Whether visitors can see this business: complete *and* approved. */
+  get isPubliclyVisible(): boolean {
+    return this.isPublished && this.approvedAt !== null;
   }
 
   get hasUnpublishedDesign(): boolean {
@@ -328,6 +343,7 @@ export class ProviderProfile {
     profile.plansOffered = null;
     profile.latitude = null;
     profile.longitude = null;
+    profile.approvedAt = null;
     profile.walkingSpots = null;
     profile.address = null;
     profile.idNumber = null;

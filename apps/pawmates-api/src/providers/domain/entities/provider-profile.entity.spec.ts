@@ -214,6 +214,32 @@ describe('ProviderProfile aggregate', () => {
     });
   });
 
+  describe('approval', () => {
+    const complete = () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.update({ category: 'vet', businessName: 'Vet', bio: 'Consultas.' });
+      return profile;
+    };
+
+    it('starts waiting for approval', () => {
+      expect(ProviderProfile.draft('account-1').approvedAt).toBeNull();
+    });
+
+    it('keeps a complete page out of sight until it is approved', () => {
+      const profile = complete();
+      expect(profile.isPublished).toBe(true);
+      expect(profile.isPubliclyVisible).toBe(false);
+      profile.approvedAt = new Date();
+      expect(profile.isPubliclyVisible).toBe(true);
+    });
+
+    it('keeps an approved but incomplete page out of sight', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.approvedAt = new Date();
+      expect(profile.isPubliclyVisible).toBe(false);
+    });
+  });
+
   describe('location', () => {
     it('starts without a location', () => {
       const profile = ProviderProfile.draft('account-1');
