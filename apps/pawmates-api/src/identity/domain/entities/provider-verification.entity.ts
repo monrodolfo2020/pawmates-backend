@@ -13,7 +13,7 @@ export type VerificationStatus = 'pending' | 'verified' | 'rejected';
  * README/DEPLOY.md for the tradeoff that accepts). `status` starts
  * `pending`; an admin reviews the two photos and moves it to `verified`
  * or `rejected` via PATCH /v1/admin/provider-verifications/:id
- * (AdminController) — there's still no automated check, that decision
+ * (AdminVerificationsController) — there's still no automated check, that decision
  * is a human looking at the photos, which is what this was always laying
  * the groundwork for.
  */

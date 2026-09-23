@@ -1,7 +1,7 @@
 import { IsBoolean, IsEmail, IsOptional, IsString, MaxLength } from 'class-validator';
 
 /** PATCH /v1/admin/accounts/:id — name and email only. Roles are not
- * editable here on purpose: see AdminController.updateAccount. */
+ * editable here on purpose: see AdminAccountsController.update. */
 export class UpdateAccountDto {
   @IsOptional()
   @IsString()

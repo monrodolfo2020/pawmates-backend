@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BillingController } from './api/billing.controller';
 import { GeoController } from './api/geo.controller';
+import { AdminBusinessesController } from './api/admin-businesses.controller';
+import { AdminPlanCodesController } from './api/admin-plan-codes.controller';
 import { ProvidersController } from './api/providers.controller';
 import { ProviderProfile } from './domain/entities/provider-profile.entity';
 import { PlanActivationCode } from './domain/entities/plan-activation-code.entity';
@@ -41,7 +43,13 @@ import { LegalAcceptance } from '../identity/domain/entities/legal-acceptance.en
       LegalAcceptance,
     ]),
   ],
-  controllers: [ProvidersController, BillingController, GeoController],
+  controllers: [
+    ProvidersController,
+    BillingController,
+    GeoController,
+    AdminBusinessesController,
+    AdminPlanCodesController,
+  ],
   providers: [
     ProviderMarketplaceAdapter,
     SimulatedBillingAdapter,

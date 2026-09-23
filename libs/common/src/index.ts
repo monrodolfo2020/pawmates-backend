@@ -5,6 +5,7 @@ export * from './events/event-topics';
 export * from './persistence/outbox-event.base';
 export * from './auth/jwt-auth.guard';
 export * from './auth/jwt-secret';
+export * from './auth/admin.guard';
 export * from './auth/account-status.port';
 export * from './auth/current-account.decorator';
 export * from './idempotency/idempotency.interceptor';

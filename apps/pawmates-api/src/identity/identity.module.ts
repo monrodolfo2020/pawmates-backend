@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AdminController } from './api/admin.controller';
+import { AdminAccountsController } from './api/admin/admin-accounts.controller';
+import { AdminVerificationsController } from './api/admin/admin-verifications.controller';
 import { LegalController } from './api/legal.controller';
 import { AuthController } from './api/auth.controller';
 import { AuthService } from './api/auth.service';
@@ -14,7 +15,6 @@ import { LegalAcceptance } from './domain/entities/legal-acceptance.entity';
 import { Pet } from './domain/entities/pet.entity';
 import { ProviderVerification } from './domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../providers/domain/entities/provider-profile.entity';
-import { PlanActivationCode } from '../providers/domain/entities/plan-activation-code.entity';
 
 @Module({
   imports: [
@@ -25,19 +25,22 @@ import { PlanActivationCode } from '../providers/domain/entities/plan-activation
       EmailVerificationCode,
       PasswordResetToken,
       LegalAcceptance,
-      // Read-only for AdminController (see listVerifications'
-      // profilePublished field) and written once by AuthService to seed a
+      // Read-only for AdminVerificationsController (its profilePublished
+      // field) and written once by AuthService to seed a
       // brand-new provider's public photo at signup (see
       // AuthService.seedInitialProfilePhoto) — ProvidersModule still owns
       // every other write to it via ProvidersController.
       ProviderProfile,
-      // Written by AdminController alone — issuing a VIP activation code
-      // is an admin action, while redeeming one belongs to the business
-      // and lives in ProvidersModule's BillingController.
-      PlanActivationCode,
     ]),
   ],
-  controllers: [AuthController, MeController, PetsController, AdminController, LegalController],
+  controllers: [
+    AuthController,
+    MeController,
+    PetsController,
+    LegalController,
+    AdminAccountsController,
+    AdminVerificationsController,
+  ],
   providers: [AuthService, AccountDeletionService],
 })
 export class IdentityModule {}
