@@ -25,6 +25,7 @@ import { BookingMessage } from '../domain/entities/booking-message.entity';
 import { BookingProcessManager } from '../domain/saga/booking-process-manager';
 import { Pet } from '../../identity/domain/entities/pet.entity';
 import { Account } from '../../identity/domain/entities/account.entity';
+import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 import { BookingStatus } from '../domain/value-objects/booking-status';
 import type { RecurrenceRule } from '../domain/value-objects/recurrence-rule';
 import {
@@ -52,6 +53,8 @@ export class BookingController {
     private readonly messages: Repository<BookingMessage>,
     @InjectRepository(Pet) private readonly pets: Repository<Pet>,
     @InjectRepository(Account) private readonly accounts: Repository<Account>,
+    @InjectRepository(ProviderProfile)
+    private readonly providerProfiles: Repository<ProviderProfile>,
   ) {}
 
   @Post()
@@ -218,21 +221,29 @@ export class BookingController {
     return { data: toBookingResponse(booking, enrichment) };
   }
 
-  /** Batch-loads the pet names and owner name this booking list needs to
-   * render as more than bare ids (e.g. "Toby · Beagle" on the paseador's
-   * Dashboard) — one query per entity, not N+1 per row. */
-  private async loadEnrichment(
-    rows: Booking[],
-  ): Promise<{ petNames: Map<string, string>; ownerNames: Map<string, string | null> }> {
+  /** Batch-loads the names a booking list needs to render as more than
+   * bare ids — the pets ("Toby · Beagle"), the owner (for the business's
+   * dashboard) and the business (for the owner's "Tus reservas") — one
+   * query per table, not N+1 per row. */
+  private async loadEnrichment(rows: Booking[]): Promise<Enrichment> {
     const petIds = [...new Set(rows.flatMap((b) => b.lines?.map((l) => l.petId) ?? []))];
-    const ownerIds = [...new Set(rows.map((b) => b.ownerId))];
-    const [pets, owners]: [Pet[], Account[]] = await Promise.all([
+    const accountIds = [...new Set(rows.flatMap((b) => [b.ownerId, b.providerId]))];
+    const providerIds = [...new Set(rows.map((b) => b.providerId))];
+    const [pets, accounts, profiles]: [Pet[], Account[], ProviderProfile[]] = await Promise.all([
       petIds.length ? this.pets.find({ where: { id: In(petIds) } }) : Promise.resolve([]),
-      ownerIds.length ? this.accounts.find({ where: { id: In(ownerIds) } }) : Promise.resolve([]),
+      accountIds.length ? this.accounts.find({ where: { id: In(accountIds) } }) : Promise.resolve([]),
+      providerIds.length
+        ? this.providerProfiles.find({ where: { accountId: In(providerIds) } })
+        : Promise.resolve([]),
     ]);
+    const accountNames = new Map(accounts.map((a) => [a.id, a.name]));
+    const businessNames = new Map(profiles.map((p) => [p.accountId, p.businessName]));
     return {
       petNames: new Map(pets.map((p) => [p.id, `${p.name} · ${p.breed}`])),
-      ownerNames: new Map(owners.map((o) => [o.id, o.name])),
+      ownerNames: accountNames,
+      providerNames: new Map(
+        providerIds.map((id) => [id, businessNames.get(id) ?? accountNames.get(id) ?? null]),
+      ),
     };
   }
 
@@ -413,9 +424,15 @@ function toMessageResponse(message: BookingMessage) {
   };
 }
 
+type Enrichment = {
+  petNames: Map<string, string>;
+  ownerNames: Map<string, string | null>;
+  providerNames: Map<string, string | null>;
+};
+
 function toBookingResponse(
   booking: Booking,
-  enrichment?: { petNames: Map<string, string>; ownerNames: Map<string, string | null> },
+  enrichment?: Enrichment,
   viewerAccountId?: string,
 ) {
   const viewerLastReadAt =
@@ -434,6 +451,7 @@ function toBookingResponse(
     ownerId: booking.ownerId,
     ownerName: enrichment?.ownerNames.get(booking.ownerId) ?? null,
     providerId: booking.providerId,
+    providerName: enrichment?.providerNames.get(booking.providerId) ?? null,
     status: booking.status,
     scheduledAt: booking.scheduledAt,
     hasUnreadMessages,

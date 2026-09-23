@@ -390,6 +390,10 @@ function toDirectoryResponse(
     slug: profile.slug,
     photo: profile.photoBase64,
     serviceArea: profile.serviceArea,
+    // The storefront address the business chose to publish (a vet's,
+    // a groomer's) — already public on its page; the directory card shows
+    // it when there's no service area.
+    publicAddress: profile.publicAddress,
     specialty: profile.specialty,
     price: profile.price,
     plansOffered: profile.plansOffered,
