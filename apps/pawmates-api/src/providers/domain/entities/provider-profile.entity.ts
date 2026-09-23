@@ -225,6 +225,11 @@ export class ProviderProfile {
   @Column({ name: 'trial_ends_at', type: 'datetime', nullable: true })
   trialEndsAt!: Date | null;
 
+  /** The last trial email sent (see trialNoticeDue), so each goes out
+   * once even though the daily job looks at the business every day. */
+  @Column({ name: 'trial_notice_stage', type: 'text', nullable: true })
+  trialNoticeStage!: TrialNotice | null;
+
   /** What the business is editing right now. Only reaches the public
    * page once publishDesign() copies it across — the point of the
    * "Diseño" / "En línea" split. */
@@ -286,6 +291,23 @@ export class ProviderProfile {
   startTrial(now: Date = new Date()): void {
     if (this.trialEndsAt !== null) return;
     this.trialEndsAt = new Date(now.getTime() + ProviderProfile.TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  }
+
+  /**
+   * Which trial email this business should get now, if any: a week
+   * before the end, the day before, and once it's over. A business that
+   * went VIP gets none. If the daily job missed a day, it sends only the
+   * latest one that applies — never "7 days left" to someone whose trial
+   * ended yesterday.
+   */
+  trialNoticeDue(now: Date = new Date()): TrialNotice | null {
+    if (this.trialEndsAt === null || this.isVip(now)) return null;
+    const left = this.trialEndsAt.getTime() - now.getTime();
+    const due: TrialNotice | null =
+      left <= 0 ? 'ended' : left <= DAY_MS ? '1d' : left <= 7 * DAY_MS ? '7d' : null;
+    if (due === null) return null;
+    const sent = this.trialNoticeStage ? TRIAL_NOTICES.indexOf(this.trialNoticeStage) : -1;
+    return TRIAL_NOTICES.indexOf(due) > sent ? due : null;
   }
 
   inTrial(now: Date = new Date()): boolean {
@@ -402,6 +424,7 @@ export class ProviderProfile {
     profile.plan = DEFAULT_BUSINESS_PLAN;
     profile.planExpiresAt = null;
     profile.trialEndsAt = null;
+    profile.trialNoticeStage = null;
     profile.designDraft = null;
     profile.designPublished = null;
     return profile;
@@ -559,3 +582,9 @@ function normalizeDesign(design: PageDesign | null): PageDesign | null {
     return design;
   }
 }
+
+/** The trial emails, in the order they go out. */
+export const TRIAL_NOTICES = ['7d', '1d', 'ended'] as const;
+export type TrialNotice = (typeof TRIAL_NOTICES)[number];
+
+const DAY_MS = 24 * 60 * 60 * 1000;

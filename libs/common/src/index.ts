@@ -18,4 +18,5 @@ export * from './email/send-verification-email';
 export * from './email/send-password-reset-email';
 export * from './email/send-email';
 export * from './email/business-emails';
+export * from './email/trial-emails';
 export * from './qr/microsite-qr';

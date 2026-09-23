@@ -478,4 +478,39 @@ describe('ProviderProfile aggregate', () => {
       expect(() => profile.saveDesignDraft({ sections })).toThrow(ValidationError);
     });
   });
+
+  describe('trial emails', () => {
+    const ends = new Date('2026-04-09T12:00:00Z');
+    const trialing = () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.trialEndsAt = ends;
+      return profile;
+    };
+    const daysBefore = (d: number) => new Date(ends.getTime() - d * 24 * 60 * 60 * 1000);
+
+    it('sends a week before, the day before, and at the end — each once', () => {
+      const profile = trialing();
+      expect(profile.trialNoticeDue(daysBefore(10))).toBeNull();
+      expect(profile.trialNoticeDue(daysBefore(6.5))).toBe('7d');
+      profile.trialNoticeStage = '7d';
+      expect(profile.trialNoticeDue(daysBefore(3))).toBeNull();
+      expect(profile.trialNoticeDue(daysBefore(0.5))).toBe('1d');
+      profile.trialNoticeStage = '1d';
+      expect(profile.trialNoticeDue(daysBefore(0.2))).toBeNull();
+      expect(profile.trialNoticeDue(daysBefore(-1))).toBe('ended');
+      profile.trialNoticeStage = 'ended';
+      expect(profile.trialNoticeDue(daysBefore(-5))).toBeNull();
+    });
+
+    it('after a missed day sends only the latest notice that applies', () => {
+      expect(trialing().trialNoticeDue(daysBefore(-2))).toBe('ended');
+    });
+
+    it('sends nothing to a business on VIP or with no trial', () => {
+      const vip = trialing();
+      vip.setPlan('vip');
+      expect(vip.trialNoticeDue(daysBefore(1))).toBeNull();
+      expect(ProviderProfile.draft('account-2').trialNoticeDue()).toBeNull();
+    });
+  });
 });

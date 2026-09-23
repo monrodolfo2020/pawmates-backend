@@ -14,6 +14,8 @@ import { ProviderMarketplaceAdapter } from './infra/adapters/provider-marketplac
 import { Account } from '../identity/domain/entities/account.entity';
 import { ProviderVerification } from '../identity/domain/entities/provider-verification.entity';
 import { LegalAcceptance } from '../identity/domain/entities/legal-acceptance.entity';
+import { CronController } from './api/cron.controller';
+import { TrialRemindersService } from './api/trial-reminders.service';
 
 /**
  * Providers Bounded Context — the real Marketplace/provider-directory
@@ -49,9 +51,11 @@ import { LegalAcceptance } from '../identity/domain/entities/legal-acceptance.en
     GeoController,
     AdminBusinessesController,
     AdminPlanCodesController,
+    CronController,
   ],
   providers: [
     ProviderMarketplaceAdapter,
+    TrialRemindersService,
     SimulatedBillingAdapter,
     // No real gateway is wired up yet; swapping this one line is what
     // connecting Stripe or MercadoPago comes down to (see billing.port.ts).
