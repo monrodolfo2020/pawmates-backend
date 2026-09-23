@@ -32,15 +32,8 @@ import { BookingStatus, canTransition } from '../value-objects/booking-status';
  */
 @Entity({ name: 'booking_bookings' })
 export class Booking {
-  // The migration declares the real DB primary key as the composite
-  // (id, scheduled_at) — required by Postgres for a table partitioned by
-  // range on scheduled_at (Data Model doc §13). `id` (a ULID) is globally
-  // unique on its own, so the entity models it as the sole logical key;
-  // every query here already goes through `id`, which the composite PK's
-  // leading column keeps indexed.
-  // A ULID (see static request() below), not an RFC-4122 UUID — Postgres's
-  // `uuid` type rejects ULID's Crockford base32 encoding, so this column
-  // is `text` even though it's still globally unique and time-ordered.
+  // A ULID (see static request() below): globally unique and ordered by
+  // creation time, stored as text. The table's primary key.
   @PrimaryColumn('text')
   id!: string;
 

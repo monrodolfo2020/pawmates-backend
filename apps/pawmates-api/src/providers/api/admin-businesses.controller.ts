@@ -48,6 +48,11 @@ export class AdminBusinessesController {
         planExpiresAt: p.planExpiresAt,
         isPublished: p.isPublished,
         approvedAt: p.approvedAt,
+        // What a visitor actually gets: also false while the account is
+        // suspended, which hides the business without unpublishing it.
+        isPubliclyVisible:
+          p.isPubliclyVisible &&
+          accountById.get(p.accountId)?.disabledAt === null,
         createdAt: p.createdAt,
       })),
     };

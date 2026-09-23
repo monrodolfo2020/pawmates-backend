@@ -8,9 +8,10 @@ import {
 export type VerificationStatus = 'pending' | 'verified' | 'rejected';
 
 /**
- * Captured once, at signup as (or later becoming) a provider — face photo
- * + ID document photo, both base64 in Postgres for this MVP (see
- * README/DEPLOY.md for the tradeoff that accepts). `status` starts
+ * Captured at signup as (or later becoming) a provider — face photo + ID
+ * document photo, kept in private blob storage (or inline in this row
+ * when no private store is configured; see private-blob-storage.ts) and
+ * destroyed once an admin decides. `status` starts
  * `pending`; an admin reviews the two photos and moves it to `verified`
  * or `rejected` via PATCH /v1/admin/provider-verifications/:id
  * (AdminVerificationsController) — there's still no automated check, that decision

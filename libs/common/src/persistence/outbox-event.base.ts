@@ -10,8 +10,7 @@ import { Column, CreateDateColumn, PrimaryColumn } from 'typeorm';
  */
 export abstract class OutboxEventBase {
   // A ULID (Data Model doc §13's "ordenable por tiempo" ID convention),
-  // not an RFC-4122 UUID — Postgres's `uuid` type rejects ULID's Crockford
-  // base32 encoding, so this column is `text`.
+  // stored as text.
   @PrimaryColumn('text')
   id!: string;
 

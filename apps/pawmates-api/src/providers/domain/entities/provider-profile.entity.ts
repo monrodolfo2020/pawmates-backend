@@ -3,9 +3,12 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  IsNull,
+  Not,
   PrimaryColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import type { FindOptionsWhere } from 'typeorm';
 import { ulid } from 'ulid';
 import { bigintTransformer } from './bigint.transformer';
 import {
@@ -266,7 +269,10 @@ export class ProviderProfile {
     return this.designPublished ?? DEFAULT_PAGE_DESIGN;
   }
 
-  /** Whether visitors can see this business: complete *and* approved. */
+  /** Whether visitors can see this business: complete *and* approved
+   * (`isPublished` only means complete). The same rule as a query is
+   * PUBLICLY_VISIBLE, below — change both together. A suspended
+   * account is hidden on top of this, by whoever lists businesses. */
   get isPubliclyVisible(): boolean {
     return this.isPublished && this.approvedAt !== null;
   }
@@ -487,3 +493,10 @@ export class ProviderProfile {
     );
   }
 }
+
+/** isPubliclyVisible as a `where` clause, for the queries behind the
+ * directory, a business's public page and booking. */
+export const PUBLICLY_VISIBLE: FindOptionsWhere<ProviderProfile> = {
+  isPublished: true,
+  approvedAt: Not(IsNull()),
+};

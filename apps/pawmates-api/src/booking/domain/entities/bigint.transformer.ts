@@ -1,6 +1,6 @@
-// Postgres returns bigint as string by default (values may exceed the
-// safe integer range for other columns); minor-currency-unit amounts
-// never will in practice, so we transform back to number for Money.
+// Amounts are stored as bigint (minor currency units), and a database
+// driver may hand bigint back as a string; parseInt makes it a number for
+// Money either way. Amounts never approach the unsafe-integer range.
 export const bigintTransformer = {
   to: (value: number) => value,
   from: (value: string) => parseInt(value, 10),

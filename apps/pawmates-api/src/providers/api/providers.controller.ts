@@ -14,10 +14,10 @@ import type { AuthenticatedAccount } from '@pawmates/common';
 import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Not, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 import { Account } from '../../identity/domain/entities/account.entity';
 import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
-import { ProviderProfile } from '../domain/entities/provider-profile.entity';
+import { ProviderProfile, PUBLICLY_VISIBLE } from '../domain/entities/provider-profile.entity';
 import { SERVICE_CATEGORIES, slugify } from '../domain/value-objects/service-category';
 import type { ServiceCategory } from '../domain/value-objects/service-category';
 import { SaveProviderProfileDto } from './dto/save-provider-profile.dto';
@@ -52,13 +52,12 @@ export class ProvidersController {
   @Get()
   async list(@Query('category') category?: string) {
     const isKnownCategory = SERVICE_CATEGORIES.includes(category as ServiceCategory);
-    // Complete *and* approved: a business waiting for an admin's
-    // approval can prepare its page, but doesn't appear here yet.
-    const visible = { isPublished: true, approvedAt: Not(IsNull()) };
+    // A business waiting for an admin's approval can prepare its page,
+    // but doesn't appear here yet.
     const rows = await this.profiles.find({
       where: isKnownCategory
-        ? { ...visible, category: category as ServiceCategory }
-        : visible,
+        ? { ...PUBLICLY_VISIBLE, category: category as ServiceCategory }
+        : PUBLICLY_VISIBLE,
       order: { createdAt: 'DESC' },
     });
     const accountIds = rows.map((r) => r.accountId);
@@ -314,7 +313,7 @@ export class ProvidersController {
   @Get('by-slug/:slug')
   async getBySlug(@Param('slug') slug: string) {
     const profile = await this.profiles.findOne({
-      where: { slug, isPublished: true, approvedAt: Not(IsNull()) },
+      where: { ...PUBLICLY_VISIBLE, slug },
     });
     if (!profile) {
       throw new ResourceNotFoundError('Esta página no existe o todavía no está publicada.');
@@ -327,7 +326,7 @@ export class ProvidersController {
   @Get(':accountId')
   async getPublic(@Param('accountId') accountId: string) {
     const profile = await this.profiles.findOne({
-      where: { accountId, isPublished: true, approvedAt: Not(IsNull()) },
+      where: { ...PUBLICLY_VISIBLE, accountId },
     });
     if (!profile) {
       throw new ResourceNotFoundError('Este negocio todavía no tiene una página publicada.');
@@ -461,6 +460,9 @@ function toOwnResponse(profile: ProviderProfile) {
     phone: profile.phone,
     isPublished: profile.isPublished,
     approvedAt: profile.approvedAt,
+    // What the app should say about "published": complete *and*
+    // approved. The account is active by definition — it's signed in.
+    isPubliclyVisible: profile.isPubliclyVisible,
     plan: profile.plan,
     isVip: profile.isVip(),
     planExpiresAt: profile.planExpiresAt,

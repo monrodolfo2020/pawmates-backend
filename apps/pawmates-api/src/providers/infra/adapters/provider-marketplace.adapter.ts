@@ -1,13 +1,15 @@
 import { Money } from '@pawmates/common';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import type {
   AvailabilityCheck,
   MarketplacePort,
 } from '../../../booking/domain/ports/marketplace.port';
-import { ProviderProfile } from '../../domain/entities/provider-profile.entity';
-
+import {
+  ProviderProfile,
+  PUBLICLY_VISIBLE,
+} from '../../domain/entities/provider-profile.entity';
 
 /**
  * The real MarketplacePort implementation (see ProviderProfile's
@@ -36,11 +38,7 @@ export class ProviderMarketplaceAdapter implements MarketplacePort {
     // Same bar as the public directory: a business the admin hasn't
     // approved yet can't be found there, so it can't be booked either.
     const profile = await this.profiles.findOne({
-      where: {
-        accountId: params.providerServiceId,
-        isPublished: true,
-        approvedAt: Not(IsNull()),
-      },
+      where: { ...PUBLICLY_VISIBLE, accountId: params.providerServiceId },
     });
     if (!profile || !profile.price) {
       return {
