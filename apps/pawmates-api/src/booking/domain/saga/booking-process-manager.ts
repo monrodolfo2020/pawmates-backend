@@ -33,8 +33,9 @@ import { longestDurationMinutes } from './duration';
 // A fixed placeholder UUID (matching the DEMO_* ones the frontend already
 // uses for providerServiceId/addressId — see api/client.ts), not a real
 // catalog entry: any booking line tagged with this code is treated as a
-// free Meet & Greet request rather than a paid walk. Must stay in sync
-// with MEET_GREET_SERVICE_TYPE_CODE in the frontend's api/client.ts.
+// free Meet & Greet request rather than a paid walk. Must match
+// MEET_GREET_SERVICE_TYPE_CODE in the frontend's api/client.ts —
+// checked by the app repo's scripts/check-shared-lists.mjs, which CI runs.
 export const MEET_GREET_SERVICE_TYPE_CODE = '00000000-0000-4000-8000-0000000000c1';
 
 /**

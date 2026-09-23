@@ -1,0 +1,38 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit -p apps/pawmates-api/tsconfig.app.json
+      - run: npm test
+
+  # The script lives in the app repo (pawmates); running it from here too
+  # means a change to a shared list on this side is checked as well.
+  shared-lists:
+    name: Listas compartidas con la app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: pawmates-backend
+      - uses: actions/checkout@v4
+        with:
+          repository: monrodolfo2020/pawmates
+          path: pawmates
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node pawmates/scripts/check-shared-lists.mjs --backend pawmates-backend --frontend pawmates

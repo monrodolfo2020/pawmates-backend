@@ -1,7 +1,9 @@
 import { Column, Entity, PrimaryColumn } from 'typeorm';
 import { ulid } from 'ulid';
 
-export type WalkEventType = 'photo' | 'pee' | 'poop';
+/** The frontend has a copy — checked by the app repo's scripts/check-shared-lists.mjs, which CI runs. */
+export const WALK_EVENT_TYPES = ['photo', 'pee', 'poop'] as const;
+export type WalkEventType = (typeof WALK_EVENT_TYPES)[number];
 
 /**
  * A moment the walker logs mid-walk — a photo, or a pee/poop mark — for

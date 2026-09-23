@@ -6,7 +6,8 @@ import {
   MinLength,
 } from 'class-validator';
 
-const SIZES = ['Pequeño', 'Mediano', 'Grande'];
+/** The frontend has a copy — checked by the app repo's scripts/check-shared-lists.mjs, which CI runs. */
+export const PET_SIZES = ['Pequeño', 'Mediano', 'Grande'];
 
 export class CreatePetDto {
   @IsString()
@@ -16,7 +17,7 @@ export class CreatePetDto {
   @IsString()
   breed!: string;
 
-  @IsIn(SIZES)
+  @IsIn(PET_SIZES)
   size!: string;
 
   @IsArray()
@@ -42,7 +43,7 @@ export class UpdatePetDto {
   @IsOptional()
   breed?: string;
 
-  @IsIn(SIZES)
+  @IsIn(PET_SIZES)
   @IsOptional()
   size?: string;
 

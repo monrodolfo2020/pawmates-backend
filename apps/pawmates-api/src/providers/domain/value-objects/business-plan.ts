@@ -13,7 +13,8 @@
  * brings the business's design back untouched. ProviderProfile.isVip()
  * is the question worth asking.
  *
- * Must stay in sync with BUSINESS_PLANS in the frontend's api/client.ts.
+ * Must match BUSINESS_PLANS in the frontend's api/client.ts —
+ * checked by the app repo's scripts/check-shared-lists.mjs, which CI runs.
  */
 export const BUSINESS_PLANS = ['free', 'vip'] as const;
 

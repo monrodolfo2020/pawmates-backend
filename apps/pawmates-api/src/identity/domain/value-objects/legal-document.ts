@@ -16,8 +16,8 @@ import { ValidationError } from '@pawmates/common';
  * document show up as pending for everyone who accepted the previous
  * one, which is the point.
  *
- * Must stay in sync with LEGAL_DOCUMENTS in the frontend's api/client.ts
- * and with the texts bundled in the frontend's src/legal/.
+ * Must match LEGAL_DOCUMENTS in the frontend's api/client.ts (checked by the app repo's scripts/check-shared-lists.mjs, which CI runs)
+ * and the texts bundled in the frontend's src/legal/.
  */
 export const LEGAL_DOCUMENTS = [
   'privacy_notice',

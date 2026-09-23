@@ -10,8 +10,8 @@ import { ValidationError } from '@pawmates/common';
  * designDraft/designPublished), not a set of fields anything else
  * queries or filters by.
  *
- * Must stay in sync with the same names in the frontend's
- * api/client.ts (same manual-sync convention as SERVICE_CATEGORIES).
+ * The lists must match the same names in the frontend's api/client.ts —
+ * checked by the app repo's scripts/check-shared-lists.mjs, which CI runs.
  */
 export const PAGE_TEMPLATES = ['classic', 'gallery', 'minimal'] as const;
 export type PageTemplate = (typeof PAGE_TEMPLATES)[number];

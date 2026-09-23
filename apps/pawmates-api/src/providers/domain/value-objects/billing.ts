@@ -5,7 +5,8 @@ import { ValidationError } from '@pawmates/common';
  * than 12 monthly charges (two months free at the defaults below) —
  * that discount is the whole reason to offer it.
  *
- * Must stay in sync with BILLING_PERIODS in the frontend's api/client.ts.
+ * Must match BILLING_PERIODS in the frontend's api/client.ts —
+ * checked by the app repo's scripts/check-shared-lists.mjs, which CI runs.
  */
 export const BILLING_PERIODS = ['monthly', 'annual'] as const;
 

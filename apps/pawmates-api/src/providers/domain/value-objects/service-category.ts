@@ -11,9 +11,8 @@
  * was more than a shop owner could reasonably fill in. Rows that had it
  * were moved to 'other' (see RemoveShopCategory).
  *
- * Must stay in sync with SERVICE_CATEGORIES in the frontend's
- * api/client.ts (same manual-sync convention as
- * MEET_GREET_SERVICE_TYPE_CODE).
+ * Must match SERVICE_CATEGORIES in the frontend's api/client.ts —
+ * checked by the app repo's scripts/check-shared-lists.mjs, which CI runs.
  */
 export const SERVICE_CATEGORIES = [
   'walker',

@@ -24,6 +24,7 @@ import { LegalAcceptance } from '../domain/entities/legal-acceptance.entity';
 import { recordAcceptances } from './legal.controller';
 import type { LegalDocumentType } from '../domain/value-objects/legal-document';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
+import type { ServiceCategory } from '../../providers/domain/value-objects/service-category';
 import { AccountStatusAdapter } from '../infra/adapters/account-status.adapter';
 
 // Where the emailed reset link points — the deployed frontend, not this
@@ -32,8 +33,10 @@ import { AccountStatusAdapter } from '../infra/adapters/account-status.adapter';
 // still sends a working link instead of a broken one.
 const APP_URL = process.env.APP_URL ?? 'https://pawmates-one.vercel.app';
 
-/** For the admin's email only; the app has its own copy of these. */
-const CATEGORY_LABELS: Record<string, string> = {
+/** For the admin's email only. The app has its own copy
+ * (CATEGORY_LABELS_SINGULAR); scripts/check-shared-lists.mjs in the
+ * frontend repo checks they say the same. */
+const CATEGORY_LABELS: Record<ServiceCategory, string> = {
   walker: 'Paseador',
   vet: 'Veterinaria',
   grooming: 'Estética canina',
@@ -71,21 +74,22 @@ export class AuthService {
     @Optional() private readonly accountStatus?: AccountStatusAdapter,
   ) {}
 
-  async signup(params: {
-    email: string;
-    password: string;
-    role: 'owner' | 'provider';
-    name?: string;
-    category?: string;
-    businessName?: string;
-    facePhoto?: string;
-    idDocumentPhoto?: string;
-    profilePhoto?: string;
-    acceptedLegal: { type: string; version: string }[];
-  },
-  /** Kept with the acceptance record — it's what makes the record worth
-   * anything if the acceptance is ever disputed. */
-  context?: { ipAddress?: string | null; userAgent?: string | null },
+  async signup(
+    params: {
+      email: string;
+      password: string;
+      role: 'owner' | 'provider';
+      name?: string;
+      category?: string;
+      businessName?: string;
+      facePhoto?: string;
+      idDocumentPhoto?: string;
+      profilePhoto?: string;
+      acceptedLegal: { type: string; version: string }[];
+    },
+    /** Kept with the acceptance record — it's what makes the record worth
+     * anything if the acceptance is ever disputed. */
+    context?: { ipAddress?: string | null; userAgent?: string | null },
   ): Promise<AuthResult> {
     const existing = await this.accounts.findOne({
       where: { email: params.email.toLowerCase() },
@@ -301,7 +305,9 @@ export class AuthService {
     if (!account) throw new ResourceNotFoundError('Cuenta no encontrada.');
     if (account.emailVerifiedAt) return; // already verified — idempotent
 
-    const record = await this.verificationCodes.findOne({ where: { accountId } });
+    const record = await this.verificationCodes.findOne({
+      where: { accountId },
+    });
     if (!record) {
       throw new ValidationError('Pide un código nuevo antes de verificar.');
     }
@@ -401,14 +407,17 @@ export class AuthService {
       if (to.length === 0) return;
       await sendNewBusinessPendingEmail({
         to,
-        businessName: params.businessName?.trim() || account.name || account.email,
+        businessName:
+          params.businessName?.trim() || account.name || account.email,
         ownerName: account.name,
         email: account.email,
-        category: CATEGORY_LABELS[params.category ?? 'walker'] ?? 'Otro servicio',
+        // Already validated against SERVICE_CATEGORIES by the DTO.
+        category:
+          CATEGORY_LABELS[(params.category ?? 'walker') as ServiceCategory] ??
+          'Otro servicio',
         adminUrl: `${APP_URL}/admin`,
       });
     } catch (error) {
-      // eslint-disable-next-line no-console
       console.error('[auth] no se pudo avisar a los administradores', error);
     }
   }

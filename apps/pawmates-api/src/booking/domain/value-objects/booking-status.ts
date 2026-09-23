@@ -2,6 +2,9 @@
  * BookingStatus (Domain Model doc §10). Transitions only move forward,
  * except into `disputed`, which can originate from `completed` (Support
  * escalates after the fact) — never from an earlier state.
+ *
+ * The frontend has a copy (BOOKING_STATUSES, with a Spanish label for
+ * each) — checked by the app repo's scripts/check-shared-lists.mjs, which CI runs.
  */
 export enum BookingStatus {
   Requested = 'requested',
