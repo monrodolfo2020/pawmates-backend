@@ -1,3 +1,4 @@
+import { BookingInvalidTransitionError } from '@pawmates/common';
 import { BookingCannotCancelInProgressError, Money } from '@pawmates/common';
 import { Booking } from './booking.entity';
 import { PriceBreakdown } from './price-breakdown.entity';
@@ -60,7 +61,7 @@ describe('Booking aggregate', () => {
 
   it('throws on an invalid transition (e.g. completing before starting)', () => {
     const booking = makeBooking();
-    expect(() => booking.complete()).toThrow(/Invalid Booking transition/);
+    expect(() => booking.complete()).toThrow(BookingInvalidTransitionError);
   });
 
   it('refuses to cancel a booking that is already in progress', () => {

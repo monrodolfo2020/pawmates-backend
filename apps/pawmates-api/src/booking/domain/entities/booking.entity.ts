@@ -1,4 +1,8 @@
-import { BookingCannotCancelInProgressError, Money } from '@pawmates/common';
+import {
+  BookingCannotCancelInProgressError,
+  BookingInvalidTransitionError,
+  Money,
+} from '@pawmates/common';
 import {
   Column,
   CreateDateColumn,
@@ -130,8 +134,8 @@ export class Booking {
 
   private transitionTo(next: BookingStatus): void {
     if (!canTransition(this.status, next)) {
-      throw new Error(
-        `Invalid Booking transition: ${this.status} -> ${next} (id=${this.id})`,
+      throw new BookingInvalidTransitionError(
+        TRANSITION_MESSAGES[next] ?? 'Esta reserva no puede cambiar a ese estado.',
       );
     }
     this.status = next;
@@ -196,3 +200,12 @@ export class Booking {
     );
   }
 }
+
+/** What the person sees when a transition is refused, keyed by what
+ * they were trying to do. */
+const TRANSITION_MESSAGES: Partial<Record<BookingStatus, string>> = {
+  [BookingStatus.InProgress]: 'Solo se puede iniciar un paseo confirmado que no haya empezado.',
+  [BookingStatus.Completed]: 'Solo se puede terminar un paseo que está en curso.',
+  [BookingStatus.Confirmed]: 'Esta solicitud ya no está pendiente.',
+  [BookingStatus.Cancelled]: 'Esta reserva ya no se puede cancelar.',
+};

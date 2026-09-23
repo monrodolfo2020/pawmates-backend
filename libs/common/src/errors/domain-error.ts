@@ -41,6 +41,14 @@ export class BookingCannotCancelInProgressError extends DomainError {
   readonly retryable = false;
 }
 
+/** A booking asked to move to a status its current one can't reach
+ * (starting a walk nobody accepted, finishing one that never began...). */
+export class BookingInvalidTransitionError extends DomainError {
+  readonly code = 'booking.invalid_transition';
+  readonly httpStatus = 409;
+  readonly retryable = false;
+}
+
 export class BookingNotEligibleForReviewError extends DomainError {
   readonly code = 'reviews.not_eligible';
   readonly httpStatus = 409;

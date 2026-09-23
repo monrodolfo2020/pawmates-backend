@@ -46,6 +46,10 @@ import { LogWalkEventDto } from './dto/log-walk-event.dto';
  * only the booking's own provider may call them; GET is open to either
  * side (and an admin), since the owner is the one watching.
  */
+/** How early a walk can be started — a business running a little
+ * ahead of schedule, not one starting next week's walk today. */
+const EARLY_START_MS = 2 * 60 * 60 * 1000;
+
 @Controller('v1/trips')
 @UseGuards(JwtAuthGuard)
 export class TripsController {
@@ -64,7 +68,13 @@ export class TripsController {
     @Param('bookingId') bookingId: string,
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
-    this.assertIsProvider(await this.loadOrThrow(bookingId), account);
+    const booking = await this.loadOrThrow(bookingId);
+    this.assertIsProvider(booking, account);
+    if (booking.scheduledAt.getTime() - Date.now() > EARLY_START_MS) {
+      throw new ValidationError(
+        'Todavía es pronto: puedes iniciar el paseo desde 2 horas antes de la hora acordada.',
+      );
+    }
     await this.bookingProcessManager.markInProgress(bookingId);
     return { data: { status: 'started' } };
   }
