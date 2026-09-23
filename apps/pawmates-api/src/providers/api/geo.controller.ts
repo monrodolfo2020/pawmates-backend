@@ -1,4 +1,7 @@
+import { ClientIp } from '@pawmates/common';
 import { Controller, Get, Query } from '@nestjs/common';
+import { RateLimiter } from '../../infra/rate-limit/rate-limiter';
+import { RATE_LIMITS } from '../../infra/rate-limit/rate-limit-rules';
 
 /** Nominatim asks that clients identify themselves, and refuses traffic
  * that doesn't. This is why the lookup goes through our own server
@@ -42,11 +45,22 @@ export type GeoSuggestion = {
  */
 @Controller('v1/geo')
 export class GeoController {
+  constructor(private readonly limiter: RateLimiter) {}
+
   @Get('search')
-  async search(@Query('q') query?: string, @Query('country') country?: string) {
+  async search(
+    @ClientIp() ip: string,
+    @Query('q') query?: string,
+    @Query('country') country?: string,
+  ) {
     const term = query?.trim();
     if (!term || term.length < 4) {
       return { data: { available: true, results: [] as GeoSuggestion[] } };
+    }
+    // Over the limit reads as "search unavailable" like any other outage
+    // here, so the picker falls back to typing the address by hand.
+    if (!(await this.limiter.tryConsume(RATE_LIMITS.geoPerIp, ip))) {
+      return { data: { available: false, results: [] as GeoSuggestion[] } };
     }
 
     const params = new URLSearchParams({

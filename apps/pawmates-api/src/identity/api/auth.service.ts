@@ -353,7 +353,9 @@ export class AuthService {
     }
   }
 
-  async resetPassword(token: string, newPassword: string): Promise<void> {
+  /** Returns the account's email, so the caller can lift a login
+   * lockout: proving you own the inbox is the way out of one. */
+  async resetPassword(token: string, newPassword: string): Promise<string> {
     const record = await this.passwordResetTokens.findOne({ where: { token } });
     if (!record) {
       throw new ValidationError('Este enlace no es válido. Pide uno nuevo.');
@@ -367,6 +369,7 @@ export class AuthService {
     });
     account.setPasswordHash(await bcrypt.hash(newPassword, SALT_ROUNDS));
     await this.accounts.save(account);
+    return account.email;
   }
 
   private async dispatchVerificationEmail(account: Account): Promise<void> {

@@ -61,6 +61,14 @@ export class PaymentCardDeclinedError extends DomainError {
   readonly retryable = true;
 }
 
+/** Too many attempts at something from the same account or connection
+ * (see RateLimiter). The message says how long to wait. */
+export class TooManyRequestsError extends DomainError {
+  readonly code = 'rate_limit.exceeded';
+  readonly httpStatus = 429;
+  readonly retryable = true;
+}
+
 export class DependencyUnavailableError extends DomainError {
   readonly code = 'dependency.unavailable';
   readonly httpStatus = 503;

@@ -29,6 +29,7 @@ import { ProviderProfile } from './providers/domain/entities/provider-profile.en
 import { PlanActivationCode } from './providers/domain/entities/plan-activation-code.entity';
 import { ProviderPlanActivation } from './providers/domain/entities/provider-plan-activation.entity';
 import { TripsController } from './trips/trips.controller';
+import { RateLimitModule } from './infra/rate-limit/rate-limit.module';
 
 /**
  * Consolidated PawMates MVP — Identity, Providers, and Booking in one
@@ -46,6 +47,7 @@ import { TripsController } from './trips/trips.controller';
       global: true,
       useFactory: () => ({ secret: resolveJwtSecret() }),
     }),
+    RateLimitModule,
     TypeOrmModule.forRoot({
       ...libsqlConnectionOptions(),
       entities: [

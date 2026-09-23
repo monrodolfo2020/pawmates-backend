@@ -1,10 +1,14 @@
 import {
+  ClientIp,
   CurrentAccount,
+  InvalidCredentialsError,
   JwtAuthGuard,
   ValidationError,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
-import { Body, Controller, Headers, Ip, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Headers, Post, UseGuards } from '@nestjs/common';
+import { RateLimiter } from '../../infra/rate-limit/rate-limiter';
+import { RATE_LIMITS } from '../../infra/rate-limit/rate-limit-rules';
 import { AuthService } from './auth.service';
 import { AddRoleDto } from './dto/add-role.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -25,12 +29,15 @@ import { VerifyEmailDto } from './dto/verify-email.dto';
  */
 @Controller('v1/auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly limiter: RateLimiter,
+  ) {}
 
   @Post('signup')
   async signup(
     @Body() dto: SignupDto,
-    @Ip() ip: string,
+    @ClientIp() ip: string,
     @Headers('user-agent') userAgent?: string,
   ) {
     if (dto.role === 'provider' && (!dto.facePhoto || !dto.idDocumentPhoto)) {
@@ -39,14 +46,38 @@ export class AuthController {
       );
     }
     assertAcceptedRequiredDocuments(dto);
+    // Only accounts actually created count: a typo that fails validation
+    // shouldn't use up someone's allowance.
+    await this.limiter.assertAllowed(RATE_LIMITS.signupPerIp, ip);
     const result = await this.auth.signup(dto, { ipAddress: ip, userAgent });
+    await this.limiter.record(RATE_LIMITS.signupPerIp, ip);
     return { data: result };
   }
 
+  /**
+   * Only wrong passwords count, per email and per connection; a correct
+   * one clears the email's count. An email with no account counts the
+   * same as one with a wrong password, so the limit can't be used to find
+   * out which emails are registered.
+   */
   @Post('login')
-  async login(@Body() dto: LoginDto) {
-    const result = await this.auth.login(dto.email, dto.password);
-    return { data: result };
+  async login(@Body() dto: LoginDto, @ClientIp() ip: string) {
+    const email = dto.email.trim().toLowerCase();
+    await this.limiter.assertAllowed(RATE_LIMITS.loginPerAccount, email);
+    await this.limiter.assertAllowed(RATE_LIMITS.loginPerIp, ip);
+    try {
+      const result = await this.auth.login(email, dto.password);
+      await this.limiter.clear(RATE_LIMITS.loginPerAccount, email);
+      return { data: result };
+    } catch (err) {
+      if (err instanceof InvalidCredentialsError) {
+        await Promise.all([
+          this.limiter.record(RATE_LIMITS.loginPerAccount, email),
+          this.limiter.record(RATE_LIMITS.loginPerIp, ip),
+        ]);
+      }
+      throw err;
+    }
   }
 
   @Post('roles')
@@ -54,7 +85,7 @@ export class AuthController {
   async addRole(
     @Body() dto: AddRoleDto,
     @CurrentAccount() account: AuthenticatedAccount,
-    @Ip() ip: string,
+    @ClientIp() ip: string,
     @Headers('user-agent') userAgent?: string,
   ) {
     if (dto.role === 'provider' && (!dto.facePhoto || !dto.idDocumentPhoto)) {
@@ -75,7 +106,12 @@ export class AuthController {
    * its 15-minute window passes. */
   @Post('send-verification-email')
   @UseGuards(JwtAuthGuard)
-  async sendVerificationEmail(@CurrentAccount() account: AuthenticatedAccount) {
+  async sendVerificationEmail(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @ClientIp() ip: string,
+  ) {
+    await this.limiter.consume(RATE_LIMITS.emailPerAddress, account.accountId);
+    await this.limiter.consume(RATE_LIMITS.emailPerIp, ip);
     await this.auth.sendVerificationEmail(account.accountId);
     return { data: { sent: true } };
   }
@@ -86,7 +122,27 @@ export class AuthController {
     @Body() dto: VerifyEmailDto,
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
-    await this.auth.verifyEmail(account.accountId, dto.code);
+    await this.limiter.assertAllowed(
+      RATE_LIMITS.verifyCodePerAccount,
+      account.accountId,
+    );
+    try {
+      await this.auth.verifyEmail(account.accountId, dto.code);
+    } catch (err) {
+      // A wrong, expired or missing code: 5 of those and the account has
+      // to wait, which outlasts the code itself.
+      if (err instanceof ValidationError) {
+        await this.limiter.record(
+          RATE_LIMITS.verifyCodePerAccount,
+          account.accountId,
+        );
+      }
+      throw err;
+    }
+    await this.limiter.clear(
+      RATE_LIMITS.verifyCodePerAccount,
+      account.accountId,
+    );
     return { data: { verified: true } };
   }
 
@@ -94,7 +150,11 @@ export class AuthController {
    * flow. Always reports success regardless of whether the email is
    * registered (see AuthService.requestPasswordReset's comment). */
   @Post('forgot-password')
-  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+  async forgotPassword(@Body() dto: ForgotPasswordDto, @ClientIp() ip: string) {
+    // Counted whether or not the email has an account, for the same
+    // reason the response doesn't say either.
+    await this.limiter.consume(RATE_LIMITS.emailPerAddress, dto.email);
+    await this.limiter.consume(RATE_LIMITS.emailPerIp, ip);
     await this.auth.requestPasswordReset(dto.email);
     return { data: { sent: true } };
   }
@@ -103,7 +163,8 @@ export class AuthController {
    * credential here, not a session. */
   @Post('reset-password')
   async resetPassword(@Body() dto: ResetPasswordDto) {
-    await this.auth.resetPassword(dto.token, dto.newPassword);
+    const email = await this.auth.resetPassword(dto.token, dto.newPassword);
+    await this.limiter.clear(RATE_LIMITS.loginPerAccount, email);
     return { data: { reset: true } };
   }
 }

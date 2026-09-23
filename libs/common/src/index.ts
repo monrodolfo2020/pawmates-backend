@@ -8,6 +8,7 @@ export * from './auth/jwt-secret';
 export * from './auth/admin.guard';
 export * from './auth/account-status.port';
 export * from './auth/current-account.decorator';
+export * from './http/client-ip';
 export * from './idempotency/idempotency.interceptor';
 export * from './idempotency/idempotency-key.entity';
 export * from './idempotency/service-name.token';
