@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
+import { Account } from '../../domain/entities/account.entity';
 import { ProviderVerification } from '../../domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../../../providers/domain/entities/provider-profile.entity';
 import { UpdateProviderVerificationDto } from '../dto/update-provider-verification.dto';
@@ -32,6 +33,7 @@ export class AdminVerificationsController {
     private readonly verifications: Repository<ProviderVerification>,
     @InjectRepository(ProviderProfile)
     private readonly providerProfiles: Repository<ProviderProfile>,
+    @InjectRepository(Account) private readonly accounts: Repository<Account>,
   ) {}
 
   @Get()
@@ -39,16 +41,17 @@ export class AdminVerificationsController {
     const rows = await this.verifications.find({
       order: { createdAt: 'DESC' },
     });
-    const accountIds = rows.map((v) => v.accountId);
-    const publishedIds = accountIds.length
-      ? new Set(
-          (
-            await this.providerProfiles.find({
-              where: { accountId: In(accountIds), isPublished: true },
-            })
-          ).map((p) => p.accountId),
-        )
-      : new Set<string>();
+    const accountIds = [...new Set(rows.map((v) => v.accountId))];
+    // Who each row is, so the panel can say "Paseos Pedro" instead of an
+    // account id. One query per table, not one per row.
+    const [profiles, accounts] = accountIds.length
+      ? await Promise.all([
+          this.providerProfiles.find({ where: { accountId: In(accountIds) } }),
+          this.accounts.find({ where: { id: In(accountIds) } }),
+        ])
+      : [[], []];
+    const profileById = new Map(profiles.map((p) => [p.accountId, p]));
+    const accountById = new Map(accounts.map((a) => [a.id, a]));
     // These two are private blobs, so the row holds a pathname rather
     // than a usable URL — each response gets its own short-lived signed
     // link (see private-blob-storage.ts). A photo that can't be signed
@@ -77,7 +80,10 @@ export class AdminVerificationsController {
         // Verifying identity (this row) and completing the page
         // (ProviderProfile) are independent — this flags a verified
         // business that still hasn't finished its page.
-        profilePublished: publishedIds.has(v.accountId),
+        businessName: profileById.get(v.accountId)?.businessName ?? null,
+        accountName: accountById.get(v.accountId)?.name ?? null,
+        email: accountById.get(v.accountId)?.email ?? null,
+        profilePublished: profileById.get(v.accountId)?.isPublished ?? false,
         photosDeletedAt: v.photosDeletedAt,
         createdAt: v.createdAt,
       })),
