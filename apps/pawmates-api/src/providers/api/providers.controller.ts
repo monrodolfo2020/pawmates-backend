@@ -470,8 +470,14 @@ function toOwnResponse(profile: ProviderProfile) {
     plan: profile.plan,
     isVip: profile.isVip(),
     planExpiresAt: profile.planExpiresAt,
+    trialEndsAt: profile.trialEndsAt,
+    inTrial: profile.inTrial(),
+    canCustomize: profile.canCustomize(),
     design: profile.draftDesign,
-    publishedDesign: profile.designPublished,
+    publishedDesign: profile.publishedDesign,
+    // Exactly what /s/<slug> renders right now — the standard design once
+    // a trial is over without VIP — for the editor's "En vivo" view.
+    liveDesign: profile.effectiveDesign,
     hasUnpublishedDesign: profile.hasUnpublishedDesign,
   };
 }

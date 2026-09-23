@@ -216,6 +216,15 @@ export class ProviderProfile {
   @Column({ name: 'plan_expires_at', type: 'datetime', nullable: true })
   planExpiresAt!: Date | null;
 
+  /**
+   * When the free trial of the page editor runs out: TRIAL_DAYS after
+   * the business was first approved (see startTrial). null until then —
+   * a business still waiting for review can already design its page,
+   * and those days don't count against it.
+   */
+  @Column({ name: 'trial_ends_at', type: 'datetime', nullable: true })
+  trialEndsAt!: Date | null;
+
   /** What the business is editing right now. Only reaches the public
    * page once publishDesign() copies it across — the point of the
    * "Diseño" / "En línea" split. */
@@ -243,8 +252,13 @@ export class ProviderProfile {
 
   /** What the design editor opens with: whatever's being drafted, else
    * whatever's live, else PawMates' own defaults. */
-  get draftDesign(): PageDesign {
-    return this.designDraft ?? this.designPublished ?? DEFAULT_PAGE_DESIGN;
+  /** The last published design, brought up to date like draftDesign. */
+  get publishedDesign(): PageDesign | null {
+    return normalizeDesign(this.designPublished);
+  }
+
+    get draftDesign(): PageDesign {
+    return normalizeDesign(this.designDraft ?? this.designPublished) ?? DEFAULT_PAGE_DESIGN;
   }
 
   /**
@@ -264,9 +278,36 @@ export class ProviderProfile {
     return this.planExpiresAt === null || this.planExpiresAt.getTime() > now.getTime();
   }
 
+  /** Days a newly approved business gets to use the editor for free. */
+  static readonly TRIAL_DAYS = 30;
+
+  /** Starts the free trial the first time a business is approved.
+   * Approving again (after taking the approval back) doesn't restart it. */
+  startTrial(now: Date = new Date()): void {
+    if (this.trialEndsAt !== null) return;
+    this.trialEndsAt = new Date(now.getTime() + ProviderProfile.TRIAL_DAYS * 24 * 60 * 60 * 1000);
+  }
+
+  inTrial(now: Date = new Date()): boolean {
+    return this.trialEndsAt !== null && this.trialEndsAt.getTime() > now.getTime();
+  }
+
+  /**
+   * Whether the business may design its page — and whether visitors see
+   * that design. True on VIP, during the trial, and while the business
+   * waits for its first approval (nobody sees the page yet, and the
+   * trial hasn't started). Once the trial is over without VIP, the page
+   * goes back to PawMates' standard design; the business's own design
+   * stays saved for when it pays.
+   */
+  canCustomize(now: Date = new Date()): boolean {
+    if (this.isVip(now) || this.inTrial(now)) return true;
+    return this.approvedAt === null && this.trialEndsAt === null;
+  }
+
   get effectiveDesign(): PageDesign {
-    if (!this.isVip()) return DEFAULT_PAGE_DESIGN;
-    return this.designPublished ?? DEFAULT_PAGE_DESIGN;
+    if (!this.canCustomize()) return DEFAULT_PAGE_DESIGN;
+    return normalizeDesign(this.designPublished) ?? DEFAULT_PAGE_DESIGN;
   }
 
   /** Whether visitors can see this business: complete *and* approved
@@ -314,18 +355,20 @@ export class ProviderProfile {
    * the live page. Rejected outright on the free plan so a downgraded
    * account can't keep editing a design nobody will see. */
   saveDesignDraft(design: unknown): void {
-    this.assertVip();
+    this.assertCanCustomize();
     this.designDraft = parsePageDesign(design);
   }
 
   publishDesign(): void {
-    this.assertVip();
+    this.assertCanCustomize();
     this.designPublished = this.designDraft ?? DEFAULT_PAGE_DESIGN;
   }
 
-  private assertVip(): void {
-    if (!this.isVip()) {
-      throw new ValidationError('Personalizar tu página requiere el plan VIP.');
+  private assertCanCustomize(): void {
+    if (!this.canCustomize()) {
+      throw new ValidationError(
+        'Tu prueba gratis terminó. Activa el plan VIP para seguir personalizando tu página.',
+      );
     }
   }
 
@@ -358,6 +401,7 @@ export class ProviderProfile {
     profile.isPublished = false;
     profile.plan = DEFAULT_BUSINESS_PLAN;
     profile.planExpiresAt = null;
+    profile.trialEndsAt = null;
     profile.designDraft = null;
     profile.designPublished = null;
     return profile;
@@ -500,3 +544,18 @@ export const PUBLICLY_VISIBLE: FindOptionsWhere<ProviderProfile> = {
   isPublished: true,
   approvedAt: Not(IsNull()),
 };
+
+/**
+ * Designs are stored as the business saved them, so an older one may
+ * predate blocks. Reading it through the parser brings it up to date;
+ * one that somehow no longer parses is served as stored rather than
+ * breaking the page.
+ */
+function normalizeDesign(design: PageDesign | null): PageDesign | null {
+  if (!design) return null;
+  try {
+    return parsePageDesign(design);
+  } catch {
+    return design;
+  }
+}

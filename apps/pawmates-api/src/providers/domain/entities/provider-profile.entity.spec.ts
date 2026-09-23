@@ -2,6 +2,14 @@ import { Money, ValidationError } from '@pawmates/common';
 import { ProviderProfile } from './provider-profile.entity';
 import { DEFAULT_PAGE_DESIGN, PAGE_SECTIONS } from '../value-objects/page-design';
 
+/** An approved business whose free month of the editor is long gone. */
+function pastTrial(): ProviderProfile {
+  const profile = ProviderProfile.draft('account-1');
+  profile.approvedAt = new Date('2025-01-01T00:00:00Z');
+  profile.startTrial(new Date('2025-01-01T00:00:00Z'));
+  return profile;
+}
+
 describe('ProviderProfile aggregate', () => {
   it('starts as an unpublished draft with a generated id', () => {
     const profile = ProviderProfile.draft('account-1');
@@ -142,8 +150,8 @@ describe('ProviderProfile aggregate', () => {
       expect(profile.hasUnpublishedDesign).toBe(false);
     });
 
-    it('refuses to customize the page on the free plan', () => {
-      const profile = ProviderProfile.draft('account-1');
+    it('refuses to customize the page on the free plan once the trial is over', () => {
+      const profile = pastTrial();
       expect(() => profile.saveDesignDraft({ template: 'gallery' })).toThrow(ValidationError);
       expect(() => profile.publishDesign()).toThrow(ValidationError);
     });
@@ -164,7 +172,7 @@ describe('ProviderProfile aggregate', () => {
     });
 
     it('stops serving a custom design after a downgrade, without losing it', () => {
-      const profile = ProviderProfile.draft('account-1');
+      const profile = pastTrial();
       profile.setPlan('vip');
       profile.saveDesignDraft({ template: 'minimal' });
       profile.publishDesign();
@@ -313,7 +321,7 @@ describe('ProviderProfile aggregate', () => {
       // one has to travel rather than pass a date in.
       jest.useFakeTimers().setSystemTime(march);
       try {
-        const profile = ProviderProfile.draft('account-1');
+        const profile = pastTrial();
         profile.activateVip('monthly');
         profile.saveDesignDraft({ template: 'minimal' });
         profile.publishDesign();
@@ -379,5 +387,95 @@ describe('ProviderProfile aggregate', () => {
     });
     expect(profile.plansOffered).toBe('Paseo individual 30 min, plan semanal 3x');
     expect(profile.walkingSpots).toBe('Parque México, Parque España');
+  });
+
+  describe('free trial of the page editor', () => {
+    const approvedOn = new Date('2026-03-10T12:00:00Z');
+
+    it('lets a business design its page while it waits for approval', () => {
+      const profile = ProviderProfile.draft('account-1');
+      expect(profile.canCustomize()).toBe(true);
+      profile.saveDesignDraft({ template: 'gallery' });
+      profile.publishDesign();
+      expect(profile.effectiveDesign.template).toBe('gallery');
+    });
+
+    it('gives 30 days from the first approval, and approving again does not restart them', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.approvedAt = approvedOn;
+      profile.startTrial(approvedOn);
+      expect(profile.trialEndsAt).toEqual(new Date('2026-04-09T12:00:00Z'));
+      expect(profile.canCustomize(new Date('2026-04-09T11:59:00Z'))).toBe(true);
+      expect(profile.canCustomize(new Date('2026-04-09T12:00:00Z'))).toBe(false);
+
+      profile.startTrial(new Date('2026-05-01T00:00:00Z'));
+      expect(profile.trialEndsAt).toEqual(new Date('2026-04-09T12:00:00Z'));
+    });
+
+    it('after the trial serves the standard design but keeps theirs for when they pay', () => {
+      jest.useFakeTimers().setSystemTime(approvedOn);
+      try {
+        const profile = ProviderProfile.draft('account-1');
+        profile.approvedAt = approvedOn;
+        profile.startTrial();
+        profile.saveDesignDraft({ template: 'minimal' });
+        profile.publishDesign();
+        expect(profile.effectiveDesign.template).toBe('minimal');
+
+        jest.setSystemTime(new Date('2026-04-20T00:00:00Z'));
+        expect(profile.effectiveDesign).toEqual(DEFAULT_PAGE_DESIGN);
+        expect(() => profile.saveDesignDraft({ template: 'gallery' })).toThrow(ValidationError);
+
+        profile.activateVip('monthly');
+        expect(profile.effectiveDesign.template).toBe('minimal');
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
+
+  describe('page blocks', () => {
+    it('keeps added blocks in order with their content', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.saveDesignDraft({
+        sections: [
+          { id: 'b1', type: 'hero', enabled: true, data: { title: '  Paseos con cariño ', subtitle: 'En Metepec' } },
+          { id: 'about', enabled: true },
+          { id: 'b2', type: 'prices', enabled: true, data: { items: [{ name: 'Paseo 30 min', detail: '', price: '$100' }, { name: '', detail: '' }] } },
+        ],
+      });
+      const sections = profile.draftDesign.sections;
+      expect(sections.slice(0, 3).map((s) => s.id)).toEqual(['b1', 'about', 'b2']);
+      expect(sections[0].data?.title).toBe('Paseos con cariño');
+      expect(sections[2].data?.items).toEqual([{ name: 'Paseo 30 min', detail: '', price: '$100' }]);
+      // Built-in sections the client left out are still there.
+      expect(new Set(sections.filter((s) => !s.data).map((s) => s.id))).toEqual(new Set(PAGE_SECTIONS));
+    });
+
+    it('reads designs saved before blocks existed', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.designPublished = {
+        ...DEFAULT_PAGE_DESIGN,
+        sections: [{ id: 'gallery', enabled: false }],
+      } as never;
+      const gallery = profile.effectiveDesign.sections.find((s) => s.id === 'gallery');
+      expect(gallery).toEqual({ id: 'gallery', type: 'gallery', enabled: false });
+    });
+
+    it('rejects content that is too long, a bad link or a bad date', () => {
+      const profile = ProviderProfile.draft('account-1');
+      const block = (type: string, data: unknown) => ({ sections: [{ id: 'x1', type, enabled: true, data }] });
+      expect(() => profile.saveDesignDraft(block('hero', { title: 'a'.repeat(81) }))).toThrow(ValidationError);
+      expect(() => profile.saveDesignDraft(block('video', { url: 'javascript:alert(1)' }))).toThrow(ValidationError);
+      expect(() => profile.saveDesignDraft(block('social', { instagram: 'hola mundo' }))).toThrow(ValidationError);
+      expect(() => profile.saveDesignDraft(block('promo', { until: 'mañana' }))).toThrow(ValidationError);
+      expect(() => profile.saveDesignDraft(block('promo', { title: '2x1', until: '2026-12-31' }))).not.toThrow();
+    });
+
+    it('caps the number of added blocks', () => {
+      const profile = ProviderProfile.draft('account-1');
+      const sections = Array.from({ length: 21 }, (_, i) => ({ id: `b${i}`, type: 'text', enabled: true, data: {} }));
+      expect(() => profile.saveDesignDraft({ sections })).toThrow(ValidationError);
+    });
   });
 });

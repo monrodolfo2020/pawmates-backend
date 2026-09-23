@@ -45,6 +45,7 @@ export class AdminBusinessesController {
         slug: p.slug,
         plan: p.plan,
         isVip: p.isVip(),
+        trialEndsAt: p.trialEndsAt,
         planExpiresAt: p.planExpiresAt,
         isPublished: p.isPublished,
         approvedAt: p.approvedAt,
@@ -80,6 +81,8 @@ export class AdminBusinessesController {
     profile.approvedAt = dto.approved
       ? (profile.approvedAt ?? new Date())
       : null;
+    // The editor's free month starts with the first approval.
+    if (dto.approved) profile.startTrial();
     await this.providerProfiles.save(profile);
 
     let email: { sent: boolean; reason?: string } | null = null;
