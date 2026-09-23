@@ -59,8 +59,11 @@ export class ProvidersController {
     const accountIds = rows.map((r) => r.accountId);
     const accountById = await this.loadAccounts(accountIds);
     const verifiedIds = await this.loadVerifiedIds(accountIds);
+    // A suspended business drops out of the directory without being
+    // unpublished, so re-enabling it brings the listing straight back.
+    const visible = rows.filter((p) => isActiveAccount(accountById.get(p.accountId)));
     return {
-      data: rows.map((p) =>
+      data: visible.map((p) =>
         toDirectoryResponse(p, accountById.get(p.accountId), verifiedIds.has(p.accountId)),
       ),
     };
@@ -300,6 +303,12 @@ export class ProvidersController {
 
   private async detailFor(profile: ProviderProfile) {
     const account = await this.accounts.findOne({ where: { id: profile.accountId } });
+    // Same message as a page that doesn't exist: a visitor following a
+    // shared link has no reason to learn that this business was
+    // suspended, and the business has no reason to want them to.
+    if (!isActiveAccount(account ?? undefined)) {
+      throw new ResourceNotFoundError('Esta página no existe o todavía no está publicada.');
+    }
     const verified = await this.verifications.findOne({
       where: { accountId: profile.accountId, status: 'verified' },
     });
@@ -424,4 +433,9 @@ function toOwnResponse(profile: ProviderProfile) {
     publishedDesign: profile.designPublished,
     hasUnpublishedDesign: profile.hasUnpublishedDesign,
   };
+}
+
+/** False for a suspended account and for one that's gone. */
+function isActiveAccount(account: Account | undefined): boolean {
+  return account !== undefined && account.disabledAt === null;
 }

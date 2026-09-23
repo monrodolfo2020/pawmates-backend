@@ -4,6 +4,7 @@ import { AdminController } from './api/admin.controller';
 import { LegalController } from './api/legal.controller';
 import { AuthController } from './api/auth.controller';
 import { AuthService } from './api/auth.service';
+import { AccountDeletionService } from './api/account-deletion.service';
 import { MeController } from './api/me.controller';
 import { PetsController } from './api/pets.controller';
 import { Account } from './domain/entities/account.entity';
@@ -49,6 +50,6 @@ import { PlanActivationCode } from '../providers/domain/entities/plan-activation
     ]),
   ],
   controllers: [AuthController, MeController, PetsController, AdminController, LegalController],
-  providers: [AuthService],
+  providers: [AuthService, AccountDeletionService],
 })
 export class IdentityModule {}

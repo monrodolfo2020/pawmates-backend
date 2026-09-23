@@ -35,6 +35,13 @@ export class Account {
   @Column({ name: 'email_verified_at', type: 'datetime', nullable: true })
   emailVerifiedAt!: Date | null;
 
+  /** Set when an admin suspends the account; null means active. A date
+   * rather than a boolean so the admin panel can say since when, and
+   * so re-enabling is just clearing it. Checked on every request by
+   * JwtAuthGuard, not only at login — see AccountDisabledError. */
+  @Column({ name: 'disabled_at', type: 'datetime', nullable: true })
+  disabledAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 

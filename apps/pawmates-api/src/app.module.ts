@@ -23,6 +23,7 @@ import { OutboxEvent as CommerceOutboxEvent } from './commerce/domain/entities/o
 import { Product } from './commerce/domain/entities/product.entity';
 import { Storefront } from './commerce/domain/entities/storefront.entity';
 import { IdentityModule } from './identity/identity.module';
+import { AccountStatusModule } from './identity/account-status.module';
 import { Account } from './identity/domain/entities/account.entity';
 import { EmailVerificationCode } from './identity/domain/entities/email-verification-code.entity';
 import { PasswordResetToken } from './identity/domain/entities/password-reset-token.entity';
@@ -82,6 +83,7 @@ import { TripsController } from './trips/trips.controller';
       ],
       synchronize: false, // schema owned by migrations
     }),
+    AccountStatusModule,
     IdentityModule,
     ProvidersModule,
     BookingModule,

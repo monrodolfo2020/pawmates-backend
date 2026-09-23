@@ -98,3 +98,15 @@ export class RoleRequiredError extends DomainError {
   readonly httpStatus = 403;
   readonly retryable = false;
 }
+
+/**
+ * The account exists but an admin suspended it, or it was deleted.
+ * Raised by JwtAuthGuard on every request, not only at login, because
+ * tokens here don't expire: a suspension that only blocked new logins
+ * would leave everyone already signed in using the app indefinitely.
+ */
+export class AccountDisabledError extends DomainError {
+  readonly code = 'auth.account_disabled';
+  readonly httpStatus = 403;
+  readonly retryable = false;
+}

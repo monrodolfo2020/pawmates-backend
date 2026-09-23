@@ -3,6 +3,7 @@ import {
   JwtAuthGuard,
   ResourceNotFoundError,
   RoleRequiredError,
+  ValidationError,
   classifyStoredPhoto,
   isDataUrl,
   moveToPrivateStorage,
@@ -10,7 +11,7 @@ import {
   uploadBase64Photo,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Account } from '../domain/entities/account.entity';
@@ -23,9 +24,28 @@ import { UpdateCatalogItemDto } from '../../commerce/api/dto/update-catalog-item
 import { UpdateProviderVerificationDto } from './dto/update-provider-verification.dto';
 import { deleteStoredPhoto } from '@pawmates/common';
 import { UpdateBusinessPlanDto } from './dto/update-business-plan.dto';
+import {
+  DeleteAccountDto,
+  UpdateAccountDto,
+  UpdateAccountStatusDto,
+} from './dto/admin-account.dto';
+import { AccountDeletionService } from './account-deletion.service';
+import { AccountStatusAdapter } from '../infra/adapters/account-status.adapter';
 import { CreatePlanCodeDto } from '../../providers/api/dto/create-plan-code.dto';
 import { PlanActivationCode } from '../../providers/domain/entities/plan-activation-code.entity';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
+
+function toAdminAccount(a: Account) {
+  return {
+    id: a.id,
+    email: a.email,
+    name: a.name,
+    roles: a.roles,
+    emailVerified: a.emailVerifiedAt !== null,
+    disabledAt: a.disabledAt,
+    createdAt: a.createdAt,
+  };
+}
 
 function assertAdmin(account: AuthenticatedAccount): void {
   if (!account.roles.includes('admin')) {
@@ -58,6 +78,8 @@ export class AdminController {
     private readonly providerProfiles: Repository<ProviderProfile>,
     @InjectRepository(PlanActivationCode)
     private readonly planCodes: Repository<PlanActivationCode>,
+    private readonly deletion: AccountDeletionService,
+    private readonly accountStatus: AccountStatusAdapter,
   ) {}
 
   @Get('accounts')
@@ -71,9 +93,101 @@ export class AdminController {
         name: a.name,
         roles: a.roles,
         emailVerified: a.emailVerifiedAt !== null,
+        disabledAt: a.disabledAt,
         createdAt: a.createdAt,
       })),
     };
+  }
+
+  /**
+   * Corrects an account's name or email.
+   *
+   * Roles are deliberately not editable here. Granting 'admin' from a
+   * panel is a privilege escalation waiting for a stolen session, and
+   * the README's rule is that admins are promoted by hand; switching
+   * someone between owner and provider has consequences (a business page,
+   * a verification, a different agreement to accept) that a role toggle
+   * would skip.
+   *
+   * A changed email is unverified again: the new address hasn't been
+   * proven to belong to the person, and the old verification says
+   * nothing about it.
+   */
+  @Patch('accounts/:id')
+  async updateAccount(
+    @Param('id') id: string,
+    @Body() dto: UpdateAccountDto,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    assertAdmin(account);
+    const target = await this.accounts.findOne({ where: { id } });
+    if (!target) throw new ResourceNotFoundError('Esa cuenta no existe.');
+
+    if (dto.name !== undefined) {
+      target.name = dto.name.trim() || null;
+    }
+    if (dto.email !== undefined) {
+      const email = dto.email.trim().toLowerCase();
+      if (email !== target.email) {
+        const taken = await this.accounts.findOne({ where: { email } });
+        if (taken) {
+          throw new ValidationError('Ya existe otra cuenta con ese correo.');
+        }
+        target.email = email;
+        target.emailVerifiedAt = null;
+      }
+    }
+    await this.accounts.save(target);
+    return { data: toAdminAccount(target) };
+  }
+
+  /**
+   * Suspends or re-enables an account. A suspended account can't sign
+   * in, loses access immediately even with a session already open (see
+   * JwtAuthGuard), and — if it's a business — drops out of the directory
+   * and its page stops answering. Nothing is deleted, so re-enabling
+   * brings everything back as it was.
+   */
+  @Patch('accounts/:id/status')
+  async updateAccountStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateAccountStatusDto,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    assertAdmin(account);
+    if (id === account.accountId) {
+      throw new ValidationError('No puedes suspender tu propia cuenta.');
+    }
+    const target = await this.accounts.findOne({ where: { id } });
+    if (!target) throw new ResourceNotFoundError('Esa cuenta no existe.');
+    if (target.roles.includes('admin')) {
+      throw new ValidationError(
+        'Las cuentas de administrador no se suspenden desde el panel.',
+      );
+    }
+    target.disabledAt = dto.enabled ? null : new Date();
+    await this.accounts.save(target);
+    // Otherwise the guard would keep answering from its cache for a few
+    // seconds on this instance.
+    this.accountStatus.forget(id);
+    return { data: toAdminAccount(target) };
+  }
+
+  /** Permanently deletes an account — see AccountDeletionService for
+   * what goes and what is kept, and why. */
+  @Delete('accounts/:id')
+  async deleteAccount(
+    @Param('id') id: string,
+    @Body() dto: DeleteAccountDto,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    assertAdmin(account);
+    const summary = await this.deletion.delete({
+      accountId: id,
+      confirmEmail: dto.confirmEmail,
+      requestedBy: account.accountId,
+    });
+    return { data: summary };
   }
 
   @Get('provider-verifications')

@@ -1,5 +1,6 @@
 import {
   EmailAlreadyRegisteredError,
+  AccountDisabledError,
   InvalidCredentialsError,
   ResourceNotFoundError,
   ValidationError,
@@ -137,6 +138,13 @@ export class AuthService {
     });
     if (!account || !(await bcrypt.compare(password, account.passwordHash))) {
       throw new InvalidCredentialsError('Correo o contraseña incorrectos.');
+    }
+    // Checked only after the password, so a suspension can't be used to
+    // find out which emails have accounts.
+    if (account.disabledAt) {
+      throw new AccountDisabledError(
+        'Tu cuenta está suspendida. Escríbenos si crees que es un error.',
+      );
     }
     return this.issueToken(account);
   }
