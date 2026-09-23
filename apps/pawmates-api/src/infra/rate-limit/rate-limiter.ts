@@ -94,6 +94,15 @@ export class RateLimiter {
     }
   }
 
+  /** Drops every counter about one subject (an email, an account id),
+   * whatever the rule — for when that person's account is deleted. */
+  async forgetSubject(subject: string): Promise<void> {
+    await this.db.query(
+      `DELETE FROM rate_limits WHERE substr(key, instr(key, ':') + 1) = ?`,
+      [subject.trim().toLowerCase()],
+    );
+  }
+
   async clear(rule: RateLimitRule, subject: string): Promise<void> {
     await this.db.query(`DELETE FROM rate_limits WHERE key = ?`, [
       keyOf(rule, subject),

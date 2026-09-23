@@ -65,6 +65,11 @@ directorio de servicios, pero todo se puede recuperar.
      criterio a pedidos y escaparates.
    - **Fotos.** Las fotos de productos usaban el almacenamiento público
      de Blob; está bien para productos, pero confirma que sigue así.
+   - **Borrado de cuentas.** `TABLES_ON_ACCOUNT_DELETION` (en
+     `account-deletion.service.ts`) marca las tablas `commerce_*` como
+     "se conservan mientras la tienda está en pausa". Al retomarla hay que
+     decidir: el escaparate y los productos son solo del negocio (se
+     borran); los pedidos son compartidos con el comprador (se conservan).
    - **Categoría "tienda".** Se eliminó del directorio
      (migración `RemoveShopCategory`); si vuelve, hay que reponerla en
      `SERVICE_CATEGORIES` de los dos repos.
