@@ -21,6 +21,6 @@ export function micrositeQrPng(slug: string): Promise<Buffer> {
     width: 1024,
     margin: 3,
     errorCorrectionLevel: 'Q',
-    color: { dark: '#1D1533', light: '#FFFFFF' },
+    color: { dark: '#261E2C', light: '#FFFFFF' },
   });
 }

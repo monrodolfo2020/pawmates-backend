@@ -67,9 +67,9 @@ const MAX_TESTIMONIAL_AUTHOR = 60;
 export const DEFAULT_PAGE_DESIGN: PageDesign = {
   template: 'classic',
   font: 'display',
-  primaryColor: '#FF6B4A',
-  backgroundColor: '#FFF7F0',
-  textColor: '#1D1533',
+  primaryColor: '#C8492A',
+  backgroundColor: '#FBF6F1',
+  textColor: '#261E2C',
   logo: null,
   cover: null,
   sections: PAGE_SECTIONS.map((id) => ({ id, enabled: true })),
