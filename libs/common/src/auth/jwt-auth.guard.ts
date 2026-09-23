@@ -61,7 +61,8 @@ export class JwtAuthGuard implements CanActivate {
     // a deletion can take effect for someone already signed in. Checked
     // outside the try above so it surfaces as its own error rather than
     // being mistaken for a bad token.
-    if (this.status && !(await this.status.isActive(claims.sub))) {
+    const standing = this.status ? await this.status.standing(claims.sub) : null;
+    if (standing && !standing.active) {
       throw new AccountDisabledError(
         'Tu cuenta está suspendida. Escríbenos si crees que es un error.',
       );
@@ -69,7 +70,10 @@ export class JwtAuthGuard implements CanActivate {
 
     request.account = {
       accountId: claims.sub,
-      roles: claims.roles ?? [],
+      // Roles come from the account as it is now: a role taken away takes
+      // effect on tokens already issued, and a token can't grant itself
+      // one the account doesn't have.
+      roles: standing ? standing.roles : claims.roles ?? [],
       activeContext:
         (request.headers['x-active-context'] as 'owner' | 'provider') ??
         'owner',

@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import express, { json, urlencoded, type Express } from 'express';
+import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
 
 /**
@@ -18,12 +19,17 @@ let bootstrapped: Promise<void> | null = null;
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     bodyParser: false,
+    // Nest's default is process.exit(1) on a startup error, which takes
+    // the function down before handler() below can say what went wrong.
+    abortOnError: false,
   });
   app.use(json({ limit: '15mb' }));
   app.use(urlencoded({ extended: true, limit: '15mb' }));
   app.enableCors();
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.useGlobalFilters(new DomainExceptionFilter());
+  // Same as main.ts: with the DataSource the filter can recover a stale
+  // Turso stream on this warm instance instead of failing every request.
+  app.useGlobalFilters(new DomainExceptionFilter(app.get(DataSource)));
   await app.init();
 }
 
@@ -34,6 +40,24 @@ export default async function handler(
   if (!bootstrapped) {
     bootstrapped = bootstrap();
   }
-  await bootstrapped;
+  try {
+    await bootstrapped;
+  } catch (err) {
+    // A startup failure (a missing JWT_SECRET, say) would otherwise stay
+    // cached in `bootstrapped` and crash every request with no clue why.
+    // Log the reason, answer with something readable, and let the next
+    // request try again — e.g. after the variable has been set.
+    bootstrapped = null;
+    console.error('pawmates-api failed to start:', err);
+    res.status(503).json({
+      error: {
+        code: 'server.misconfigured',
+        message: 'El servicio no está disponible por un problema de configuración.',
+        retryable: true,
+      },
+      meta: {},
+    });
+    return;
+  }
   server(req, res);
 }

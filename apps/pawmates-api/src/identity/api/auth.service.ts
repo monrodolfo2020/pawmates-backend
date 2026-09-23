@@ -10,7 +10,7 @@ import {
   uploadBase64Photo,
   uploadPrivateBase64Photo,
 } from '@pawmates/common';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcryptjs';
@@ -24,6 +24,7 @@ import { LegalAcceptance } from '../domain/entities/legal-acceptance.entity';
 import { recordAcceptances } from './legal.controller';
 import type { LegalDocumentType } from '../domain/value-objects/legal-document';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
+import { AccountStatusAdapter } from '../infra/adapters/account-status.adapter';
 
 // Where the emailed reset link points — the deployed frontend, not this
 // API (see EXPO_PUBLIC_API_URL's counterpart on that side). Defaults to
@@ -66,6 +67,8 @@ export class AuthService {
     @InjectRepository(LegalAcceptance)
     private readonly legalAcceptances: Repository<LegalAcceptance>,
     private readonly jwt: JwtService,
+    // Optional so unit tests can build the service without it.
+    @Optional() private readonly accountStatus?: AccountStatusAdapter,
   ) {}
 
   async signup(params: {
@@ -184,6 +187,9 @@ export class AuthService {
     });
     account.addRole(params.role);
     await this.accounts.save(account);
+    // Permissions are read from the account (see JwtAuthGuard), so the new
+    // role has to reach the cached copy now, not in ten seconds.
+    this.accountStatus?.forget(account.id);
 
     // An owner becoming a business has to accept the provider agreement
     // — it governs a relationship they didn't have until this call, so

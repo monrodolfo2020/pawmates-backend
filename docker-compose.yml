@@ -19,6 +19,10 @@ services:
       # To point this at Turso instead of the local file, set
       # TURSO_DATABASE_URL / TURSO_AUTH_TOKEN here (they take priority
       # over SQLITE_LOCAL_PATH — see libsql-connection.ts).
+      # Local only. The image sets NODE_ENV=production, and a production
+      # server refuses the public development secret (see jwt-secret.ts),
+      # so this marks the container as a local one.
+      NODE_ENV: development
       JWT_SECRET: dev-secret-change-me
     volumes:
       - sqlite-data:/data

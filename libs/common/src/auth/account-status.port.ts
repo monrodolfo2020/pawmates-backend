@@ -6,8 +6,15 @@
  */
 export const ACCOUNT_STATUS = Symbol('ACCOUNT_STATUS');
 
-export interface AccountStatusPort {
+export interface AccountStanding {
   /** False for a suspended account and for one that no longer exists —
    * a deleted account's still-valid token must stop working too. */
-  isActive(accountId: string): Promise<boolean>;
+  active: boolean;
+  /** The account's roles as stored now, which is what permissions go by
+   * — not whatever roles were written into the token when it was issued. */
+  roles: string[];
+}
+
+export interface AccountStatusPort {
+  standing(accountId: string): Promise<AccountStanding>;
 }

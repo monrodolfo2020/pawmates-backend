@@ -39,9 +39,13 @@ should all be green).
    (all environments). These need to exist *before* you deploy —
    `vercel.json`'s `buildCommand` runs the database migration as part of
    the build step, so it needs them right away, not just at runtime.
-3. Also add `JWT_SECRET` (any long random string, e.g.
+3. Also add `JWT_SECRET` (a long random string, e.g.
    `openssl rand -hex 32` — Vercel has no Render-style auto-generation for
-   this).
+   this). **Required:** a deployed server refuses to start without it, or
+   with the public development value, and every request answers 503
+   `server.misconfigured` until it is set (the function log says why).
+   Changing it signs everyone out, since existing sessions were signed
+   with the old value.
 4. Connect a Blob store — the same Vercel project, **Storage** tab →
    **Create Database** → **Blob**, then **Connect Project** to this one if
    it isn't already. No token to copy: the SDK authenticates via OIDC
@@ -180,8 +184,9 @@ the live deployment — the `pawmates-api` Render web service itself.
   a real random value, set once at creation and never in the repo or in
   chat). Vercel doesn't have that feature — you pick the value yourself
   when setting the environment variable (step 3 above). Locally,
-  `docker-compose.yml` still uses the shared literal
-  `dev-secret-change-me` for convenience. Whichever deployment you're
+  `docker-compose.yml` and `npm run start:pawmates-api:dev` still use the
+  shared literal `dev-secret-change-me` for convenience; a deployed
+  server (NODE_ENV=production, or on Vercel/Render) refuses it. Whichever deployment you're
   testing against, copy its actual `JWT_SECRET` value from that
   platform's dashboard to mint a test token — nothing else needs it,
   since no other service verifies these tokens today.

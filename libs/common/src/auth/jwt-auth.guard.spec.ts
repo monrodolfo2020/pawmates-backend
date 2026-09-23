@@ -22,8 +22,8 @@ const jwtReturning = (claims: object | Error) =>
     ),
   }) as unknown as JwtService;
 
-const statusSaying = (active: boolean): AccountStatusPort => ({
-  isActive: jest.fn().mockResolvedValue(active),
+const statusSaying = (active: boolean, roles: string[] = ['owner']): AccountStatusPort => ({
+  standing: jest.fn().mockResolvedValue({ active, roles }),
 });
 
 describe('JwtAuthGuard', () => {
@@ -58,7 +58,20 @@ describe('JwtAuthGuard', () => {
 
     await expect(guard.canActivate(context)).rejects.toBeInstanceOf(UnauthorizedException);
     // No point asking about an account the token doesn't prove.
-    expect(status.isActive).not.toHaveBeenCalled();
+    expect(status.standing).not.toHaveBeenCalled();
+  });
+
+  it('takes roles from the account, not from the token', async () => {
+    // A token claiming admin for an account that isn't one gets the
+    // account's real roles instead.
+    const guard = new JwtAuthGuard(
+      jwtReturning({ sub: 'acc-1', roles: ['owner', 'admin'] }),
+      statusSaying(true, ['owner']),
+    );
+    const { context, request } = contextWith('Bearer claims-admin');
+
+    await guard.canActivate(context);
+    expect(request.account).toMatchObject({ roles: ['owner'] });
   });
 
   it('refuses a request with no token at all', async () => {

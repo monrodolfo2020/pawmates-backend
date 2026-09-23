@@ -1,4 +1,4 @@
-import { IdempotencyKey } from '@pawmates/common';
+import { IdempotencyKey, resolveJwtSecret } from '@pawmates/common';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -47,9 +47,11 @@ import { TripsController } from './trips/trips.controller';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    JwtModule.register({
+    // A factory so a missing secret fails the app's startup (which the
+    // serverless handler reports) instead of the module import.
+    JwtModule.registerAsync({
       global: true,
-      secret: process.env.JWT_SECRET ?? 'dev-secret-change-me',
+      useFactory: () => ({ secret: resolveJwtSecret() }),
     }),
     TypeOrmModule.forRoot({
       ...libsqlConnectionOptions(),
