@@ -31,8 +31,8 @@ import { Account } from '../identity/domain/entities/account.entity';
  * saga itself (BookingProcessManager) is unchanged from the multi-service
  * version, since it only ever depended on the port interfaces.
  *
- * Exports `TypeOrmModule` (not just its own providers) so CommerceModule's
- * InProcessBookingAdapter can inject Booking's own repository directly.
+ * Exports `TypeOrmModule` (not just its own providers) so TripsController,
+ * registered in AppModule, can inject Booking's repositories directly.
  */
 @Module({
   imports: [

@@ -1,10 +1,12 @@
 # pawmates-backend
 
 Backend for **PawMates** (a Rover/Wag-style pet-services marketplace) — a
-consolidated NestJS MVP covering three Bounded Contexts: **Identity**
-(accounts, roles, pets, provider verification), **Booking** (a dog walker
-or sitter's reservation lifecycle), and **Commerce** (walkers selling
-their own products, delivered on the owner's next walk).
+consolidated NestJS MVP covering **Identity** (accounts, roles, pets,
+provider verification), **Providers** (the public business directory and
+micro-pages) and **Booking** (a dog walker or sitter's reservation
+lifecycle). **Commerce** (walkers selling their own products) is paused:
+its code was removed but its tables and migrations stay — see
+[docs/tienda.md](docs/tienda.md).
 
 ## Consolidated MVP
 
@@ -70,38 +72,11 @@ bookings. Saga orchestration (`BookingProcessManager`), a
 `NoDoubleBookingPolicy` backed by a raw-SQL overlap query, ULID aggregate
 IDs, integer minor-currency-unit `Money`.
 
-**Commerce** ("tienda propia por paseador" — each walker gets their own
-storefront and prices, not a PawMates-curated catalog): place an order
-(charged in full at checkout), link it to a confirmed upcoming Booking
-for delivery, and have the walker explicitly confirm hand-off — never
-inferred from the trip alone. Optimistic stock locking via
-`Product.version` so two orders can't both win the last unit.
-`GET /v1/storefronts` lists every open storefront — this MVP has no real
-Marketplace/discovery Bounded Context, so it's how an owner finds a
-walker's shop rather than through curated search. Admin gets read-only
-platform-wide oversight of both storefronts and orders
-(`GET /v1/admin/storefronts`, `GET /v1/admin/orders`), same pattern as
-its existing accounts/verifications endpoints.
-
-Two things are locked down for now, both easy to loosen later: **opening
-a storefront is admin-only** (`POST /v1/storefronts` takes a
-`providerId` and requires the caller's `admin` role — a provider can no
-longer self-serve one; the platform wants to control who's allowed to
-sell before opening that up), and **a provider can't list an arbitrary
-product** — `POST /v1/storefronts/me/products` takes a `catalogItemId`,
-not free-text name/description/category, and copies those fields from
-`CatalogItem` onto the `Product` at creation time (so a later catalog
-edit never silently changes something already for sale — same
-snapshot rationale `OrderLineItem` already uses). The catalog seeds with
-100 generic pet-store items (`AddProductCatalog` migration) across every
-`ProductCategory`, no photos (`photo_base64` starts `NULL`) — the admin
-adds those through `PATCH /v1/admin/catalog/:id`
-(`GET /v1/admin/catalog` lists all of them; `GET /v1/storefronts/catalog`
-is the provider-facing subset, active only).
+**Commerce** is paused — see [docs/tienda.md](docs/tienda.md) for what
+was kept, what was removed and how to bring it back.
 
 Full request→response flow, end to end: `POST /v1/bookings` → accept →
-`POST /v1/trips/:id/start|complete` → `POST /v1/orders` → confirm
-delivery. Exercised live (see git history / this MVP's development) with
+`POST /v1/trips/:id/start|complete`. Exercised live (see git history / this MVP's development) with
 a real Turso/libSQL database, not just unit-tested.
 
 ## Architecture
@@ -126,11 +101,8 @@ apps/pawmates-api/src/
       persistence/     # TypeORM entities' migration
     api/               # Controllers, DTOs
     booking.module.ts
-  commerce/            # same shape as booking/, plus infra/adapters/
-                        # in-process-booking.adapter.ts (the one *real*,
-                        # not faked, adapter)
-    ...
-    commerce.module.ts
+  commerce/            # paused: only its migrations remain (tables kept),
+                        # see docs/tienda.md
   trips/
     trips.controller.ts   # POST /v1/trips/:id/start|complete — replaces
                             # gps-svc + the Kafka events it used to publish
@@ -146,20 +118,12 @@ apps/pawmates-api/src/
   orchestrates CreateBooking → CheckAvailability → CheckVerificationValid
   → NoDoubleBookingPolicy → persist. Payment is authorized at
   `acceptBooking()` time, not at creation — nobody's card is charged
-  before a provider has agreed to do the work. `CommerceProcessManager`
-  charges in full at `placeOrder()` time instead (a normal checkout, not a
-  future service), same "fail fast, don't touch the database until every
-  synchronous check has passed" discipline.
+  before a provider has agreed to do the work.
 - **Domain event log**: every state-changing saga step still writes a row
   to its own `outbox_events` table in the *same* DB transaction as the
   aggregate write — an audit trail, not wired to anything today. Reusing
   it as a real outbox (draining to a broker) would need zero changes to
   the process managers, only a relay job back.
-- **Delivery is never inferred from the trip alone.** `TripsController`'s
-  `complete` handler calls `commerceProcessManager.openDeliveryWindowForBooking()`
-  right after finishing the booking — that only *opens the window*;
-  marking an Order `delivered` always requires the walker's own explicit
-  `POST /v1/orders/:id/confirm-delivery`.
 - **IDs**: aggregate roots use ULIDs (time-ordered, see `ulid` package),
   stored as `text` columns — not `uuid`, since a ULID's Crockford
   base32 encoding isn't valid RFC-4122 UUID syntax (and, separately,

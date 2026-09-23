@@ -23,7 +23,6 @@ import { BookingStatus } from '../booking/domain/value-objects/booking-status';
 import { TripLocation } from '../booking/domain/entities/trip-location.entity';
 import { WalkEvent } from '../booking/domain/entities/walk-event.entity';
 import { BookingProcessManager } from '../booking/domain/saga/booking-process-manager';
-import { CommerceProcessManager } from '../commerce/domain/saga/commerce-process-manager';
 import { LogLocationDto } from './dto/log-location.dto';
 import { LogWalkEventDto } from './dto/log-walk-event.dto';
 
@@ -31,11 +30,9 @@ import { LogWalkEventDto } from './dto/log-walk-event.dto';
  * Trip API (API Design doc §05: "POST /v1/trips/{id}/start|complete"),
  * plus live GPS tracking and the post-walk Report Card. Real gps-svc
  * would own location ingestion, geofencing, and the Trip aggregate;
- * consolidating into one deployable (this MVP, see README) means the two
- * things that used to react to gps.events/TripStarted and TripCompleted
- * over Kafka — BookingProcessManager and CommerceProcessManager — can
- * just be called directly, in the same request, instead of through a
- * broker.
+ * consolidating into one deployable (this MVP, see README) means what
+ * used to react to gps.events/TripStarted and TripCompleted over Kafka —
+ * BookingProcessManager — is just called directly, in the same request.
  *
  * GET /v1/trips/:bookingId serves both the live map (while `in_progress`
  * — the owner's app polls it) and the finished Report Card (once
@@ -55,7 +52,6 @@ const EARLY_START_MS = 2 * 60 * 60 * 1000;
 export class TripsController {
   constructor(
     private readonly bookingProcessManager: BookingProcessManager,
-    private readonly commerceProcessManager: CommerceProcessManager,
     @InjectRepository(Booking) private readonly bookings: Repository<Booking>,
     @InjectRepository(TripLocation)
     private readonly tripLocations: Repository<TripLocation>,
@@ -88,9 +84,6 @@ export class TripsController {
     this.assertIsProvider(await this.loadOrThrow(bookingId), account);
     const trace = traceId ?? ulid().toLowerCase();
     await this.bookingProcessManager.completeService(bookingId, trace);
-    // Was a separate consumer reacting to booking.events/WalkFinished —
-    // now just the next line, since it's the same process.
-    await this.commerceProcessManager.openDeliveryWindowForBooking(bookingId);
     return { data: { status: 'completed' } };
   }
 

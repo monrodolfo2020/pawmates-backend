@@ -13,10 +13,6 @@ import { PasswordResetToken } from './domain/entities/password-reset-token.entit
 import { LegalAcceptance } from './domain/entities/legal-acceptance.entity';
 import { Pet } from './domain/entities/pet.entity';
 import { ProviderVerification } from './domain/entities/provider-verification.entity';
-import { CatalogItem } from '../commerce/domain/entities/catalog-item.entity';
-import { Order } from '../commerce/domain/entities/order.entity';
-import { Product } from '../commerce/domain/entities/product.entity';
-import { Storefront } from '../commerce/domain/entities/storefront.entity';
 import { ProviderProfile } from '../providers/domain/entities/provider-profile.entity';
 import { PlanActivationCode } from '../providers/domain/entities/plan-activation-code.entity';
 
@@ -29,14 +25,6 @@ import { PlanActivationCode } from '../providers/domain/entities/plan-activation
       EmailVerificationCode,
       PasswordResetToken,
       LegalAcceptance,
-      // Read-only for AdminController's platform-wide oversight — Commerce
-      // still owns writes to these via CommerceModule/CommerceProcessManager.
-      // CatalogItem is the one exception: admin manages it directly (adding
-      // photos, editing suggested prices) — there's no saga step for that.
-      Storefront,
-      Product,
-      Order,
-      CatalogItem,
       // Read-only for AdminController (see listVerifications'
       // profilePublished field) and written once by AuthService to seed a
       // brand-new provider's public photo at signup (see

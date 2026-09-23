@@ -67,27 +67,6 @@ export class DependencyUnavailableError extends DomainError {
   readonly retryable = true;
 }
 
-/** Product.reserveStock — not enough stock left to fulfill the line item. */
-export class InsufficientStockError extends DomainError {
-  readonly code = 'commerce.insufficient_stock';
-  readonly httpStatus = 409;
-  readonly retryable = false;
-}
-
-/** Order.confirmDelivered — the walker's trip for this order hasn't finished yet. */
-export class OrderDeliveryNotReadyError extends DomainError {
-  readonly code = 'commerce.delivery_not_ready';
-  readonly httpStatus = 409;
-  readonly retryable = false;
-}
-
-/** RequiresUpcomingBookingPolicy — no confirmed future Booking to attach for delivery. */
-export class NoUpcomingBookingError extends DomainError {
-  readonly code = 'commerce.no_upcoming_booking';
-  readonly httpStatus = 422;
-  readonly retryable = true;
-}
-
 export class EmailAlreadyRegisteredError extends DomainError {
   readonly code = 'auth.email_already_registered';
   readonly httpStatus = 409;

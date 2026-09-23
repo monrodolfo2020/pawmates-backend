@@ -15,13 +15,6 @@ import { RescheduleRequest } from './booking/domain/entities/reschedule-request.
 import { BookingMessage } from './booking/domain/entities/booking-message.entity';
 import { TripLocation } from './booking/domain/entities/trip-location.entity';
 import { WalkEvent } from './booking/domain/entities/walk-event.entity';
-import { CommerceModule } from './commerce/commerce.module';
-import { CatalogItem } from './commerce/domain/entities/catalog-item.entity';
-import { OrderLineItem } from './commerce/domain/entities/order-line-item.entity';
-import { Order } from './commerce/domain/entities/order.entity';
-import { OutboxEvent as CommerceOutboxEvent } from './commerce/domain/entities/outbox-event.entity';
-import { Product } from './commerce/domain/entities/product.entity';
-import { Storefront } from './commerce/domain/entities/storefront.entity';
 import { IdentityModule } from './identity/identity.module';
 import { AccountStatusModule } from './identity/account-status.module';
 import { Account } from './identity/domain/entities/account.entity';
@@ -38,7 +31,7 @@ import { ProviderPlanActivation } from './providers/domain/entities/provider-pla
 import { TripsController } from './trips/trips.controller';
 
 /**
- * Consolidated PawMates MVP — Identity, Booking, and Commerce in one
+ * Consolidated PawMates MVP — Identity, Providers, and Booking in one
  * deployable (see README's "Consolidated MVP" section for why). One
  * shared TypeOrmModule.forRoot() covers every Bounded Context's entities;
  * each feature module only registers its own slice via
@@ -75,12 +68,6 @@ import { TripsController } from './trips/trips.controller';
         WalkEvent,
         BookingMessage,
         BookingOutboxEvent,
-        Storefront,
-        Product,
-        CatalogItem,
-        Order,
-        OrderLineItem,
-        CommerceOutboxEvent,
         IdempotencyKey,
       ],
       synchronize: false, // schema owned by migrations
@@ -89,7 +76,6 @@ import { TripsController } from './trips/trips.controller';
     IdentityModule,
     ProvidersModule,
     BookingModule,
-    CommerceModule,
   ],
   controllers: [HealthController, TripsController],
 })

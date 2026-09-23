@@ -11,12 +11,6 @@ import { RescheduleRequest } from '../../booking/domain/entities/reschedule-requ
 import { BookingMessage } from '../../booking/domain/entities/booking-message.entity';
 import { TripLocation } from '../../booking/domain/entities/trip-location.entity';
 import { WalkEvent } from '../../booking/domain/entities/walk-event.entity';
-import { CatalogItem } from '../../commerce/domain/entities/catalog-item.entity';
-import { OrderLineItem } from '../../commerce/domain/entities/order-line-item.entity';
-import { Order } from '../../commerce/domain/entities/order.entity';
-import { OutboxEvent as CommerceOutboxEvent } from '../../commerce/domain/entities/outbox-event.entity';
-import { Product } from '../../commerce/domain/entities/product.entity';
-import { Storefront } from '../../commerce/domain/entities/storefront.entity';
 import { Account } from '../../identity/domain/entities/account.entity';
 import { EmailVerificationCode } from '../../identity/domain/entities/email-verification-code.entity';
 import { PasswordResetToken } from '../../identity/domain/entities/password-reset-token.entity';
@@ -59,18 +53,15 @@ const pawmatesDataSource = new DataSource({
     WalkEvent,
     BookingMessage,
     BookingOutboxEvent,
-    Storefront,
-    Product,
-    CatalogItem,
-    Order,
-    OrderLineItem,
-    CommerceOutboxEvent,
     IdempotencyKey,
   ],
   migrations: [
     __dirname + '/../../identity/infra/persistence/migrations/*.{ts,js}',
     __dirname + '/../../providers/infra/persistence/migrations/*.{ts,js}',
     __dirname + '/../../booking/infra/persistence/migrations/*.{ts,js}',
+    // The store is paused, not gone (see docs/tienda.md): its code was
+    // removed but its tables stay, so a fresh database still gets them
+    // and turning it back on doesn't need a data migration.
     __dirname + '/../../commerce/infra/persistence/migrations/*.{ts,js}',
     __dirname + '/migrations/*.{ts,js}',
   ],

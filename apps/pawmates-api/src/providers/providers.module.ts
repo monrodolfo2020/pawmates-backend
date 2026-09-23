@@ -18,8 +18,7 @@ import { LegalAcceptance } from '../identity/domain/entities/legal-acceptance.en
  * layer (Fase 0/1 of the "página pública por paseador" plan). Exports
  * TypeOrmModule (not just its own providers) so BookingModule's
  * ProviderMarketplaceAdapter can inject this module's ProviderProfile
- * repository directly — same pattern BookingModule itself already uses
- * for CommerceModule (see that module's comment).
+ * repository directly.
  *
  * Registers `Account` and `ProviderVerification` from Identity too
  * (read-only — the directory's display name and its "Identidad
@@ -27,8 +26,7 @@ import { LegalAcceptance } from '../identity/domain/entities/legal-acceptance.en
  * IdentityModule doesn't export its TypeOrmModule today, and adding
  * that export just for these two reads felt like more coupling than
  * registering the same entity classes in a second module's forFeature
- * (TypeORM allows this; AdminController's read-only Commerce entities
- * in IdentityModule are the same pattern already in this codebase).
+ * (TypeORM allows this).
  */
 @Module({
   imports: [

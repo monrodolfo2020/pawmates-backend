@@ -10,7 +10,6 @@
  */
 export const EVENT_TOPICS = {
   booking: 'booking.events',
-  commerce: 'commerce.events',
 } as const;
 
 export type EventTopic = (typeof EVENT_TOPICS)[keyof typeof EVENT_TOPICS];
