@@ -1,3 +1,5 @@
+import { senderFields } from './send-email';
+
 // Sends a verification code by email via Resend's REST API — a plain
 // `fetch` call rather than pulling in their SDK, since the whole
 // integration is one POST (same "don't add a dependency for one call"
@@ -13,14 +15,17 @@
 // one is.
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
-export async function sendVerificationEmail(to: string, code: string): Promise<void> {
+export async function sendVerificationEmail(
+  to: string,
+  code: string,
+): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
-    // eslint-disable-next-line no-console
-    console.warn(`[email] RESEND_API_KEY no configurado — código de verificación para ${to}: ${code}`);
+    console.warn(
+      `[email] RESEND_API_KEY no configurado — código de verificación para ${to}: ${code}`,
+    );
     return;
   }
-  const from = process.env.EMAIL_FROM ?? 'PawMates <onboarding@resend.dev>';
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: {
@@ -28,7 +33,7 @@ export async function sendVerificationEmail(to: string, code: string): Promise<v
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from,
+      ...senderFields(),
       to,
       subject: 'Tu código de verificación de PawMates',
       html: `
@@ -40,6 +45,8 @@ export async function sendVerificationEmail(to: string, code: string): Promise<v
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Resend respondió ${res.status} al enviar el correo de verificación: ${body}`);
+    throw new Error(
+      `Resend respondió ${res.status} al enviar el correo de verificación: ${body}`,
+    );
   }
 }

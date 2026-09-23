@@ -190,3 +190,16 @@ the live deployment — the `pawmates-api` Render web service itself.
   testing against, copy its actual `JWT_SECRET` value from that
   platform's dashboard to mint a test token — nothing else needs it,
   since no other service verifies these tokens today.
+
+## Email (Resend)
+
+Set these in the Vercel project's environment variables (Production),
+then redeploy:
+
+- `RESEND_API_KEY` — from Resend.
+- `EMAIL_FROM` — a sender on a domain verified in Resend, e.g.
+  `PawMates <notificaciones@bosquedelsaber.com>`. Without it, Resend's
+  test sender only delivers to the Resend account's own address.
+- `EMAIL_REPLY_TO` (optional) — where replies go, e.g. the operator's own
+  inbox, when the sending domain's inboxes belong to another project.
+
