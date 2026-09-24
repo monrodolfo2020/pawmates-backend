@@ -26,6 +26,7 @@ import type { LegalDocumentType } from '../domain/value-objects/legal-document';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 import type { ServiceCategory } from '../../providers/domain/value-objects/service-category';
 import { AccountStatusAdapter } from '../infra/adapters/account-status.adapter';
+import { applyFaceMatch } from '../domain/face-match';
 
 // Where the emailed reset link points — the deployed frontend, not this
 // API (see EXPO_PUBLIC_API_URL's counterpart on that side). Defaults to
@@ -256,6 +257,7 @@ export class AuthService {
     verification.facePhotoBase64 = photos.face;
     verification.idDocumentPhotoBase64 = photos.idDocument;
     verification.status = 'pending';
+    await applyFaceMatch(verification);
     await this.verifications.save(verification);
   }
 

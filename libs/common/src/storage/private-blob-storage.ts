@@ -244,3 +244,25 @@ export async function deleteStoredPhoto(value: string | null): Promise<void> {
     // Best effort by design — see the note above.
   }
 }
+
+/**
+ * The bytes of a stored photo, wherever it lives (inline data URL, the
+ * old public store, or the private one). null when it can't be read —
+ * the caller decides what that means.
+ */
+export async function readStoredPhoto(value: string | null): Promise<Buffer | null> {
+  if (!value) return null;
+  const kind = classifyStoredPhoto(value);
+  if (kind === 'data') {
+    const match = DATA_URL_PATTERN.exec(value);
+    return match ? Buffer.from(match[2], 'base64') : null;
+  }
+  const url = kind === 'private' ? await signedPhotoUrl(value) : value;
+  if (!url) return null;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS) });
+    return res.ok ? Buffer.from(await res.arrayBuffer()) : null;
+  } catch {
+    return null;
+  }
+}

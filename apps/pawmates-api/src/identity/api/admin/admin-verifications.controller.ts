@@ -2,7 +2,9 @@ import {
   AdminGuard,
   JwtAuthGuard,
   ResourceNotFoundError,
+  ValidationError,
   classifyStoredPhoto,
+  faceMatchEnabled,
   deleteStoredPhoto,
   moveToPrivateStorage,
   signedPhotoUrl,
@@ -22,6 +24,7 @@ import { Account } from '../../domain/entities/account.entity';
 import { ProviderVerification } from '../../domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../../../providers/domain/entities/provider-profile.entity';
 import { UpdateProviderVerificationDto } from '../dto/update-provider-verification.dto';
+import { applyFaceMatch } from '../../domain/face-match';
 
 /** Admin panel, "Verificaciones" tab: reviewing the identity photos
  * businesses send, and destroying them once reviewed. */
@@ -85,8 +88,40 @@ export class AdminVerificationsController {
         email: accountById.get(v.accountId)?.email ?? null,
         profilePublished: profileById.get(v.accountId)?.isPublished ?? false,
         photosDeletedAt: v.photosDeletedAt,
+        // Whether "Comparar rostros" can run for this row right now.
+        faceMatchAvailable:
+          faceMatchEnabled() && v.facePhotoBase64 !== null && v.idDocumentPhotoBase64 !== null,
+        faceMatch: v.faceMatchStatus
+          ? { status: v.faceMatchStatus, similarity: v.faceMatchSimilarity, checkedAt: v.faceMatchCheckedAt }
+          : null,
         createdAt: v.createdAt,
       })),
+    };
+  }
+
+  /** Runs (or reruns) the face comparison for one verification whose
+   * photos are still on file — for ones sent before the comparison was
+   * switched on, or when it failed the first time. */
+  @Post(':id/face-match')
+  async faceMatch(@Param('id') id: string) {
+    if (!faceMatchEnabled()) {
+      throw new ValidationError('La comparación de rostros no está activada.');
+    }
+    const verification = await this.verifications.findOne({ where: { id } });
+    if (!verification) {
+      throw new ResourceNotFoundError(`Verificación ${id} no existe.`);
+    }
+    if (!verification.facePhotoBase64 || !verification.idDocumentPhotoBase64) {
+      throw new ValidationError('Las fotos de esta verificación ya se borraron.');
+    }
+    await applyFaceMatch(verification);
+    await this.verifications.save(verification);
+    return {
+      data: {
+        status: verification.faceMatchStatus,
+        similarity: verification.faceMatchSimilarity,
+        checkedAt: verification.faceMatchCheckedAt,
+      },
     };
   }
 

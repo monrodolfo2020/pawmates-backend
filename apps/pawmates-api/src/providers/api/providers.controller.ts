@@ -22,6 +22,7 @@ import { SERVICE_CATEGORIES, slugify } from '../domain/value-objects/service-cat
 import type { ServiceCategory } from '../domain/value-objects/service-category';
 import { SaveProviderProfileDto } from './dto/save-provider-profile.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
+import { applyFaceMatch } from '../../identity/domain/face-match';
 import { LegalAcceptance } from '../../identity/domain/entities/legal-acceptance.entity';
 import {
   LEGAL_DOCUMENT_VERSIONS,
@@ -269,6 +270,10 @@ export class ProvidersController {
     verification.idDocumentPhotoBase64 = idDocument;
     verification.photosDeletedAt = null;
     verification.status = 'pending';
+    verification.faceMatchStatus = null;
+    verification.faceMatchSimilarity = null;
+    verification.faceMatchCheckedAt = null;
+    await applyFaceMatch(verification);
     await this.verifications.save(verification);
 
     await this.legalAcceptances.save(
