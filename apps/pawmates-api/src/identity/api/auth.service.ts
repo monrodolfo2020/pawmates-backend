@@ -26,7 +26,7 @@ import type { LegalDocumentType } from '../domain/value-objects/legal-document';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
 import type { ServiceCategory } from '../../providers/domain/value-objects/service-category';
 import { AccountStatusAdapter } from '../infra/adapters/account-status.adapter';
-import { applyFaceMatch } from '../domain/face-match';
+import { applyFaceMatch, emailPhotoFeedback } from '../domain/face-match';
 
 // Where the emailed reset link points — the deployed frontend, not this
 // API (see EXPO_PUBLIC_API_URL's counterpart on that side). Defaults to
@@ -138,7 +138,10 @@ export class AuthService {
     });
 
     if (params.role === 'provider' && verificationPhotos) {
-      await this.saveVerification(account.id, verificationPhotos);
+      await this.saveVerification(account.id, verificationPhotos, {
+        email: account.email,
+        businessName: params.businessName?.trim() || account.name || 'tu negocio',
+      });
       await this.seedProviderProfile(account, params);
       // Awaited, because on Vercel work left running after the response
       // can be frozen before it finishes. It can't fail the signup —
@@ -216,6 +219,10 @@ export class AuthService {
           params.facePhoto!,
           params.idDocumentPhoto!,
         ),
+        {
+          email: account.email,
+          businessName: params.businessName?.trim() || account.name || 'tu negocio',
+        },
       );
       await this.seedProviderProfile(account, params);
       await this.notifyAdminsOfNewBusiness(account, params);
@@ -247,6 +254,7 @@ export class AuthService {
   private async saveVerification(
     accountId: string,
     photos: { face: string; idDocument: string },
+    contact?: { email: string; businessName: string },
   ): Promise<void> {
     const existing = await this.verifications.findOne({
       where: { accountId },
@@ -259,6 +267,7 @@ export class AuthService {
     verification.status = 'pending';
     await applyFaceMatch(verification);
     await this.verifications.save(verification);
+    if (contact) await emailPhotoFeedback(verification, contact);
   }
 
   /** Gives a brand-new business its directory listing up front — the

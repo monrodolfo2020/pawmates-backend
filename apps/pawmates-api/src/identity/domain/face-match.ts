@@ -1,7 +1,9 @@
 import {
   compareFaces,
   faceMatchEnabled,
+  photoFeedbackEmailContent,
   readStoredPhoto,
+  sendPhotoFeedbackEmail,
 } from '@pawmates/common';
 import type { FaceMatchResult } from '@pawmates/common';
 import type { ProviderVerification } from './entities/provider-verification.entity';
@@ -62,4 +64,31 @@ export function photoFeedback(
     return 'mismatch';
   }
   return null;
+}
+
+const APP_URL = process.env.APP_URL ?? 'https://pawmates-one.vercel.app';
+
+/**
+ * Emails the business when its just-sent photos need another look (see
+ * photoFeedback). Called where photos are submitted — signup and the
+ * panel — not when an admin reruns the comparison, so nobody gets the
+ * same email twice for one submission. Never throws; a failed email is
+ * logged by sendEmail and the panel still shows the same advice.
+ */
+export async function emailPhotoFeedback(
+  verification: ProviderVerification,
+  to: { email: string; businessName: string },
+  send = sendPhotoFeedbackEmail,
+): Promise<boolean> {
+  const feedback = photoFeedback(verification);
+  if (!feedback) return false;
+  const result = await send(
+    to.email,
+    photoFeedbackEmailContent({
+      feedback,
+      businessName: to.businessName,
+      appUrl: APP_URL,
+    }),
+  ).catch(() => ({ sent: false }));
+  return result.sent;
 }

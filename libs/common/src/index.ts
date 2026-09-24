@@ -19,5 +19,6 @@ export * from './email/send-password-reset-email';
 export * from './email/send-email';
 export * from './email/business-emails';
 export * from './email/trial-emails';
+export * from './email/photo-feedback-email';
 export * from './qr/microsite-qr';
 export * from './face-match/compare-faces';

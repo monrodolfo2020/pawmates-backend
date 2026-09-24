@@ -1,5 +1,9 @@
 import { ProviderVerification } from './entities/provider-verification.entity';
-import { applyFaceMatch, photoFeedback } from './face-match';
+import {
+  applyFaceMatch,
+  emailPhotoFeedback,
+  photoFeedback,
+} from './face-match';
 
 const PNG = 'data:image/png;base64,iVBORw0KGgo=';
 
@@ -76,5 +80,52 @@ describe('photoFeedback', () => {
     expect(photoFeedback(v('pending', null, null))).toBeNull();
     expect(photoFeedback(v('verified', 'compared', 20))).toBeNull();
     expect(photoFeedback(null)).toBeNull();
+  });
+});
+
+describe('emailPhotoFeedback', () => {
+  const pending = (
+    faceMatchStatus: string | null,
+    faceMatchSimilarity: number | null,
+  ) => ({ status: 'pending', faceMatchStatus, faceMatchSimilarity }) as never;
+  const to = { email: 'lulu@t.app', businessName: 'Estética <Lulú>' };
+
+  it('emails the business when the faces do not match, without the percentage', async () => {
+    const send = jest.fn().mockResolvedValue({ sent: true });
+    await expect(
+      emailPhotoFeedback(pending('compared', 41.7), to, send),
+    ).resolves.toBe(true);
+    const [email, content] = send.mock.calls[0] as [
+      string,
+      { subject: string; html: string },
+    ];
+    expect(email).toBe('lulu@t.app');
+    expect(content.subject).toBe(
+      'Revisa las fotos de tu verificación en PawMates',
+    );
+    expect(content.html).toContain('Estética &lt;Lulú&gt;');
+    expect(content.html).not.toMatch(/41|%/);
+  });
+
+  it('asks for a new photo when one had no face', async () => {
+    const send = jest.fn().mockResolvedValue({ sent: true });
+    await emailPhotoFeedback(pending('no_face_id', null), to, send);
+    const [, content] = send.mock.calls[0] as [
+      string,
+      { subject: string; html: string },
+    ];
+    expect(content.subject).toBe(
+      'Necesitamos otra foto para verificar tu identidad',
+    );
+    expect(content.html).toContain('identificación');
+  });
+
+  it('sends nothing when there is nothing to fix', async () => {
+    const send = jest.fn();
+    await expect(
+      emailPhotoFeedback(pending('compared', 95), to, send),
+    ).resolves.toBe(false);
+    await emailPhotoFeedback(pending(null, null), to, send);
+    expect(send).not.toHaveBeenCalled();
   });
 });

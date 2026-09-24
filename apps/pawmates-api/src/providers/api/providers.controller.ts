@@ -22,7 +22,11 @@ import { SERVICE_CATEGORIES, slugify } from '../domain/value-objects/service-cat
 import type { ServiceCategory } from '../domain/value-objects/service-category';
 import { SaveProviderProfileDto } from './dto/save-provider-profile.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
-import { applyFaceMatch, photoFeedback } from '../../identity/domain/face-match';
+import {
+  applyFaceMatch,
+  emailPhotoFeedback,
+  photoFeedback,
+} from '../../identity/domain/face-match';
 import { LegalAcceptance } from '../../identity/domain/entities/legal-acceptance.entity';
 import {
   LEGAL_DOCUMENT_VERSIONS,
@@ -278,6 +282,18 @@ export class ProvidersController {
     verification.faceMatchCheckedAt = null;
     await applyFaceMatch(verification);
     await this.verifications.save(verification);
+    if (photoFeedback(verification)) {
+      const [owner, profile] = await Promise.all([
+        this.accounts.findOne({ where: { id: account.accountId } }),
+        this.profiles.findOne({ where: { accountId: account.accountId } }),
+      ]);
+      if (owner) {
+        await emailPhotoFeedback(verification, {
+          email: owner.email,
+          businessName: profile?.businessName ?? owner.name ?? 'tu negocio',
+        });
+      }
+    }
 
     await this.legalAcceptances.save(
       LegalAcceptance.record({
