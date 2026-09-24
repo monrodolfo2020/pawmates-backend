@@ -1,4 +1,8 @@
-import { compareFaces, faceMatchEnabled, readStoredPhoto } from '@pawmates/common';
+import {
+  compareFaces,
+  faceMatchEnabled,
+  readStoredPhoto,
+} from '@pawmates/common';
 import type { FaceMatchResult } from '@pawmates/common';
 import type { ProviderVerification } from './entities/provider-verification.entity';
 
@@ -19,7 +23,9 @@ export async function applyFaceMatch(
       readStoredPhoto(verification.idDocumentPhotoBase64),
     ]);
     const result: FaceMatchResult =
-      selfie && idDocument ? await compare(selfie, idDocument) : { status: 'error', similarity: null };
+      selfie && idDocument
+        ? await compare(selfie, idDocument)
+        : { status: 'error', similarity: null };
     verification.faceMatchStatus = result.status;
     verification.faceMatchSimilarity = result.similarity;
   } catch {
@@ -27,4 +33,33 @@ export async function applyFaceMatch(
     verification.faceMatchSimilarity = null;
   }
   verification.faceMatchCheckedAt = new Date();
+}
+
+/** Below this similarity the faces are treated as "don't look alike" —
+ * the same line the admin panel draws in red. */
+export const FACE_MISMATCH_BELOW = 70;
+
+/**
+ * What the business should be told about its own photos, if anything:
+ * which one to retake, or that the two faces don't look alike. Only
+ * while the verification is pending (after a decision the photos are
+ * gone), and never the percentage itself — that would only help someone
+ * tune a fake until it passes.
+ */
+export function photoFeedback(
+  v: Pick<
+    ProviderVerification,
+    'status' | 'faceMatchStatus' | 'faceMatchSimilarity'
+  > | null,
+): 'retake_selfie' | 'retake_id' | 'mismatch' | null {
+  if (!v || v.status !== 'pending') return null;
+  if (v.faceMatchStatus === 'no_face_selfie') return 'retake_selfie';
+  if (v.faceMatchStatus === 'no_face_id') return 'retake_id';
+  if (
+    v.faceMatchStatus === 'compared' &&
+    (v.faceMatchSimilarity ?? 100) < FACE_MISMATCH_BELOW
+  ) {
+    return 'mismatch';
+  }
+  return null;
 }

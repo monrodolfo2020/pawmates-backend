@@ -22,7 +22,7 @@ import { SERVICE_CATEGORIES, slugify } from '../domain/value-objects/service-cat
 import type { ServiceCategory } from '../domain/value-objects/service-category';
 import { SaveProviderProfileDto } from './dto/save-provider-profile.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
-import { applyFaceMatch } from '../../identity/domain/face-match';
+import { applyFaceMatch, photoFeedback } from '../../identity/domain/face-match';
 import { LegalAcceptance } from '../../identity/domain/entities/legal-acceptance.entity';
 import {
   LEGAL_DOCUMENT_VERSIONS,
@@ -220,6 +220,9 @@ export class ProvidersController {
         status: row?.status ?? 'none',
         submittedAt: row?.createdAt ?? null,
         photosDeletedAt: row?.photosDeletedAt ?? null,
+        // From the automatic comparison: which photo to retake, or that
+        // the faces don't look alike — so they can fix it before review.
+        photoFeedback: photoFeedback(row),
         consentVersion: LEGAL_DOCUMENT_VERSIONS.identity_verification_consent,
       },
     };
