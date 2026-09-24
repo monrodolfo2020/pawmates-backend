@@ -25,6 +25,8 @@ import { ProviderVerification } from '../../domain/entities/provider-verificatio
 import { ProviderProfile } from '../../../providers/domain/entities/provider-profile.entity';
 import { UpdateProviderVerificationDto } from '../dto/update-provider-verification.dto';
 import { applyFaceMatch } from '../../domain/face-match';
+import { LegalAcceptance } from '../../domain/entities/legal-acceptance.entity';
+import { LEGAL_DOCUMENT_VERSIONS } from '../../domain/value-objects/legal-document';
 
 /** Admin panel, "Verificaciones" tab: reviewing the identity photos
  * businesses send, and destroying them once reviewed. */
@@ -37,7 +39,29 @@ export class AdminVerificationsController {
     @InjectRepository(ProviderProfile)
     private readonly providerProfiles: Repository<ProviderProfile>,
     @InjectRepository(Account) private readonly accounts: Repository<Account>,
+    @InjectRepository(LegalAcceptance)
+    private readonly acceptances: Repository<LegalAcceptance>,
   ) {}
+
+  /**
+   * Accounts that consented to the *current* verification consent — the
+   * one that covers the automated comparison. Photos sent under an older
+   * consent (which promised no automated facial recognition) must not be
+   * compared, even by hand from this panel.
+   */
+  private async consentedToComparison(
+    accountIds: string[],
+  ): Promise<Set<string>> {
+    if (accountIds.length === 0) return new Set();
+    const rows = await this.acceptances.find({
+      where: {
+        accountId: In(accountIds),
+        documentType: 'identity_verification_consent',
+        documentVersion: LEGAL_DOCUMENT_VERSIONS.identity_verification_consent,
+      },
+    });
+    return new Set(rows.map((r) => r.accountId));
+  }
 
   @Get()
   async list() {
@@ -54,6 +78,7 @@ export class AdminVerificationsController {
         ])
       : [[], []];
     const profileById = new Map(profiles.map((p) => [p.accountId, p]));
+    const consented = await this.consentedToComparison(accountIds);
     const accountById = new Map(accounts.map((a) => [a.id, a]));
     // These two are private blobs, so the row holds a pathname rather
     // than a usable URL — each response gets its own short-lived signed
@@ -89,10 +114,24 @@ export class AdminVerificationsController {
         profilePublished: profileById.get(v.accountId)?.isPublished ?? false,
         photosDeletedAt: v.photosDeletedAt,
         // Whether "Comparar rostros" can run for this row right now.
+        // Photos on file, comparison switched on, but sent under the
+        // older consent: the panel says why it can't compare them.
+        faceMatchNeedsNewConsent:
+          faceMatchEnabled() &&
+          !consented.has(v.accountId) &&
+          v.facePhotoBase64 !== null &&
+          v.idDocumentPhotoBase64 !== null,
         faceMatchAvailable:
-          faceMatchEnabled() && v.facePhotoBase64 !== null && v.idDocumentPhotoBase64 !== null,
+          faceMatchEnabled() &&
+          consented.has(v.accountId) &&
+          v.facePhotoBase64 !== null &&
+          v.idDocumentPhotoBase64 !== null,
         faceMatch: v.faceMatchStatus
-          ? { status: v.faceMatchStatus, similarity: v.faceMatchSimilarity, checkedAt: v.faceMatchCheckedAt }
+          ? {
+              status: v.faceMatchStatus,
+              similarity: v.faceMatchSimilarity,
+              checkedAt: v.faceMatchCheckedAt,
+            }
           : null,
         createdAt: v.createdAt,
       })),
@@ -112,7 +151,18 @@ export class AdminVerificationsController {
       throw new ResourceNotFoundError(`Verificación ${id} no existe.`);
     }
     if (!verification.facePhotoBase64 || !verification.idDocumentPhotoBase64) {
-      throw new ValidationError('Las fotos de esta verificación ya se borraron.');
+      throw new ValidationError(
+        'Las fotos de esta verificación ya se borraron.',
+      );
+    }
+    if (
+      !(await this.consentedToComparison([verification.accountId])).has(
+        verification.accountId,
+      )
+    ) {
+      throw new ValidationError(
+        'Estas fotos se enviaron con un consentimiento que no incluía la comparación automatizada. Pídele al negocio que las envíe de nuevo desde su panel.',
+      );
     }
     await applyFaceMatch(verification);
     await this.verifications.save(verification);
