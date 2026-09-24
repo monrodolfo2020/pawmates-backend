@@ -5,6 +5,7 @@ import {
   ValidationError,
   classifyStoredPhoto,
   faceMatchEnabled,
+  testFaceMatchConnection,
   deleteStoredPhoto,
   moveToPrivateStorage,
   signedPhotoUrl,
@@ -135,6 +136,19 @@ export class AdminVerificationsController {
           : null,
         createdAt: v.createdAt,
       })),
+    };
+  }
+
+  /** Checks the AWS keys, permission and region with a generated image —
+   * no one's photo — so the admin can confirm the setup before switching
+   * the comparison on. See testFaceMatchConnection. */
+  @Post('face-match-connection-test')
+  async testConnection() {
+    return {
+      data: {
+        ...(await testFaceMatchConnection()),
+        enabled: faceMatchEnabled(),
+      },
     };
   }
 
