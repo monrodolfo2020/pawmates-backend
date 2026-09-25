@@ -195,6 +195,9 @@ describe('ProviderProfile aggregate', () => {
       expect(() => profile.saveDesignDraft({ template: 'neon' })).toThrow(ValidationError);
       expect(() => profile.saveDesignDraft({ font: 'comic' })).toThrow(ValidationError);
       expect(() => profile.saveDesignDraft({ primaryColor: 'rojo' })).toThrow(ValidationError);
+      expect(() => profile.saveDesignDraft({ textSize: 'enorme' })).toThrow(ValidationError);
+      profile.saveDesignDraft({ font: 'handwritten', textSize: 'large' });
+      expect(profile.draftDesign).toMatchObject({ font: 'handwritten', textSize: 'large' });
     });
 
     it('fills in sections the client left out instead of dropping them', () => {

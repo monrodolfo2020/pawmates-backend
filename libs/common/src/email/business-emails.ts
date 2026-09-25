@@ -28,6 +28,34 @@ export function sendNewBusinessPendingEmail(params: {
 }
 
 /**
+ * Confirms to a business, right after it signs up, that the registration
+ * went through — and what happens next, since its page isn't public until
+ * an admin approves it. Without this, nothing told them they were in.
+ */
+export function sendBusinessWelcomeEmail(params: {
+  to: string;
+  businessName: string;
+  appUrl: string;
+}): Promise<EmailResult> {
+  const name = escapeHtml(params.businessName);
+  return sendEmail({
+    to: params.to,
+    subject: `Recibimos el registro de ${params.businessName} en PawMates`,
+    html: `
+      <p>¡Hola! Registramos <strong>${name}</strong> en PawMates.</p>
+      <p>Esto es lo que sigue:</p>
+      <ol>
+        <li><strong>Verifica tu correo</strong> con el código de 6 dígitos que te mandamos aparte.</li>
+        <li><strong>Completa tu página</strong> desde tu panel: descripción, fotos, servicios y WhatsApp. Tienes 30 días para diseñarla gratis a tu gusto, que empiezan a contar cuando aprobemos tu negocio.</li>
+        <li><strong>Revisamos tu negocio.</strong> En cuanto lo aprobemos te escribimos con tu enlace y tu código QR para compartir.</li>
+      </ol>
+      <p><a href="${params.appUrl}" style="display:inline-block;padding:12px 18px;background:#C8492A;color:#ffffff;border-radius:10px;text-decoration:none;font-weight:bold;">Abrir mi panel</a></p>
+      <p>Si tú no creaste esta cuenta, responde a este correo y la revisamos.</p>
+    `,
+  });
+}
+
+/**
  * Tells a business it has been approved, with its link and its QR code.
  *
  * The QR goes out twice on purpose: as an image in the body, for anyone

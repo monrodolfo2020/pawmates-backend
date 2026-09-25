@@ -6,6 +6,7 @@ import {
   ValidationError,
   sendVerificationEmail,
   sendPasswordResetEmail,
+  sendBusinessWelcomeEmail,
   sendNewBusinessPendingEmail,
   uploadBase64Photo,
   uploadPrivateBase64Photo,
@@ -149,6 +150,7 @@ export class AuthService {
       // its own timeout — and the business is in the review queue either
       // way, whether or not the email lands.
       await this.notifyAdminsOfNewBusiness(account, params);
+      await this.welcomeBusiness(account, params);
     }
 
     // Fire-and-forget — a slow or misconfigured email provider (see
@@ -226,6 +228,7 @@ export class AuthService {
       );
       await this.seedProviderProfile(account, params);
       await this.notifyAdminsOfNewBusiness(account, params);
+      await this.welcomeBusiness(account, params);
     }
 
     return this.issueToken(account);
@@ -366,6 +369,20 @@ export class AuthService {
 
   /** Returns the account's email, so the caller can lift a login
    * lockout: proving you own the inbox is the way out of one. */
+  /** Changes the password from inside the app, which needs the current
+   * one — a signed-in session alone isn't proof enough. */
+  async changePassword(accountId: string, currentPassword: string, newPassword: string): Promise<void> {
+    const account = await this.accounts.findOneOrFail({ where: { id: accountId } });
+    if (!(await bcrypt.compare(currentPassword, account.passwordHash))) {
+      throw new ValidationError('La contraseña actual no es correcta.');
+    }
+    if (currentPassword === newPassword) {
+      throw new ValidationError('La contraseña nueva tiene que ser distinta de la actual.');
+    }
+    account.setPasswordHash(await bcrypt.hash(newPassword, SALT_ROUNDS));
+    await this.accounts.save(account);
+  }
+
   async resetPassword(token: string, newPassword: string): Promise<string> {
     const record = await this.passwordResetTokens.findOne({ where: { token } });
     if (!record) {
@@ -405,6 +422,19 @@ export class AuthService {
         `No se pudo enviar el correo de verificación a ${account.email}: ${(err as Error).message}`,
       );
     }
+  }
+
+  /** Confirms the registration to the business itself. Like the admin
+   * notice, it can't fail the signup: sendEmail reports, never throws. */
+  private async welcomeBusiness(
+    account: Account,
+    params: { businessName?: string },
+  ): Promise<void> {
+    await sendBusinessWelcomeEmail({
+      to: account.email,
+      businessName: params.businessName?.trim() || account.name || 'tu negocio',
+      appUrl: APP_URL,
+    }).catch((error) => console.error('[auth] no se pudo dar la bienvenida', error));
   }
 
   private async notifyAdminsOfNewBusiness(

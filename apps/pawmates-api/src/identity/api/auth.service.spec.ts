@@ -18,15 +18,20 @@ import { ProviderProfile } from '../../providers/domain/entities/provider-profil
 // Real uploads need a network call + BLOB_READ_WRITE_TOKEN — this only
 // verifies AuthService hands the right value to it, not the upload itself
 // (see blob-storage.ts's own tests, if any, for that).
+import { sendBusinessWelcomeEmail } from '@pawmates/common';
+
 jest.mock('@pawmates/common', () => ({
   ...jest.requireActual('@pawmates/common'),
-  uploadBase64Photo: jest.fn((dataUrl: string) => Promise.resolve(`https://blob.test/${dataUrl}`)),
+  uploadBase64Photo: jest.fn((dataUrl: string) =>
+    Promise.resolve(`https://blob.test/${dataUrl}`),
+  ),
   // The verification photos go to private storage, which stores a
   // pathname rather than a URL — that difference is the point, so the
   // fake mirrors it.
   uploadPrivateBase64Photo: jest.fn((dataUrl: string, folder: string) =>
     Promise.resolve(`${folder}/${dataUrl}.jpg`),
   ),
+  sendBusinessWelcomeEmail: jest.fn(() => Promise.resolve({ sent: true })),
 }));
 
 /** The shape AuthController has already validated by the time it calls
@@ -170,6 +175,28 @@ describe('AuthService', () => {
       );
     });
 
+    it('confirms the registration to the business by email', async () => {
+      accounts.findOne.mockResolvedValue(null);
+      verifications.findOne.mockResolvedValue(null);
+
+      await service.signup({
+        acceptedLegal: ACCEPTED,
+        email: 'walker@test.com',
+        password: 'password123',
+        role: 'provider',
+        businessName: 'Paseos Pedro',
+        facePhoto: 'face-b64',
+        idDocumentPhoto: 'id-b64',
+      });
+
+      expect(sendBusinessWelcomeEmail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'walker@test.com',
+          businessName: 'Paseos Pedro',
+        }),
+      );
+    });
+
     it('seeds the directory listing with the category and name picked at signup', async () => {
       accounts.findOne.mockResolvedValue(null);
       verifications.findOne.mockResolvedValue(null);
@@ -211,7 +238,10 @@ describe('AuthService', () => {
       });
 
       expect(providerProfiles.save).toHaveBeenCalledWith(
-        expect.objectContaining({ businessName: 'Lucía Paseos', category: 'walker' }),
+        expect.objectContaining({
+          businessName: 'Lucía Paseos',
+          category: 'walker',
+        }),
       );
     });
 
@@ -276,10 +306,10 @@ describe('AuthService', () => {
     // This is what left accounts that could log in but had no
     // verification and no business page, and couldn't sign up again
     // because the email was taken: the account used to be written first.
-    const common = jest.requireMock('@pawmates/common') as {
-      uploadPrivateBase64Photo: jest.Mock;
-    };
-    common.uploadPrivateBase64Photo.mockRejectedValueOnce(new Error('storage down'));
+    const common = jest.requireMock('@pawmates/common');
+    common.uploadPrivateBase64Photo.mockRejectedValueOnce(
+      new Error('storage down'),
+    );
     accounts.findOne.mockResolvedValue(null);
 
     await expect(
@@ -333,7 +363,10 @@ describe('AuthService', () => {
       });
 
       expect(providerProfiles.save).toHaveBeenCalledWith(
-        expect.objectContaining({ accountId: 'acc-1', photoBase64: 'https://blob.test/face-b64' }),
+        expect.objectContaining({
+          accountId: 'acc-1',
+          photoBase64: 'https://blob.test/face-b64',
+        }),
       );
     });
   });
@@ -360,7 +393,9 @@ describe('AuthService', () => {
       account.emailVerifiedAt = new Date();
       accounts.findOne.mockResolvedValue(account);
 
-      await expect(service.sendVerificationEmail('acc-1')).rejects.toThrow(ValidationError);
+      await expect(service.sendVerificationEmail('acc-1')).rejects.toThrow(
+        ValidationError,
+      );
       expect(verificationCodes.save).not.toHaveBeenCalled();
     });
 
@@ -400,7 +435,9 @@ describe('AuthService', () => {
       const wrongCode = record.code === '000000' ? '111111' : '000000';
       verificationCodes.findOne.mockResolvedValue(record);
 
-      await expect(service.verifyEmail('acc-1', wrongCode)).rejects.toThrow(ValidationError);
+      await expect(service.verifyEmail('acc-1', wrongCode)).rejects.toThrow(
+        ValidationError,
+      );
       expect(account.emailVerifiedAt).toBeNull();
     });
 
@@ -422,7 +459,9 @@ describe('AuthService', () => {
       accounts.findOne.mockResolvedValue(account);
       verificationCodes.findOne.mockResolvedValue(null);
 
-      await expect(service.verifyEmail('acc-1', '123456')).rejects.toThrow(ValidationError);
+      await expect(service.verifyEmail('acc-1', '123456')).rejects.toThrow(
+        ValidationError,
+      );
     });
   });
 
@@ -436,7 +475,9 @@ describe('AuthService', () => {
 
       await service.requestPasswordReset('Owner@Test.com');
 
-      expect(accounts.findOne).toHaveBeenCalledWith({ where: { email: 'owner@test.com' } });
+      expect(accounts.findOne).toHaveBeenCalledWith({
+        where: { email: 'owner@test.com' },
+      });
       expect(passwordResetTokens.save).toHaveBeenCalledWith(
         expect.objectContaining({ accountId: 'acc-1', consumedAt: null }),
       );
@@ -445,7 +486,9 @@ describe('AuthService', () => {
     it('silently no-ops for an unregistered email — never reveals whether it exists', async () => {
       accounts.findOne.mockResolvedValue(null);
 
-      await expect(service.requestPasswordReset('nobody@test.com')).resolves.toBeUndefined();
+      await expect(
+        service.requestPasswordReset('nobody@test.com'),
+      ).resolves.toBeUndefined();
       expect(passwordResetTokens.save).not.toHaveBeenCalled();
     });
   });
@@ -464,13 +507,17 @@ describe('AuthService', () => {
       expect(record.consumedAt).not.toBeNull();
       expect(passwordResetTokens.save).toHaveBeenCalledWith(record);
       expect(account.passwordHash).not.toBe('old-hash');
-      expect(await bcrypt.compare('newPassword123', account.passwordHash)).toBe(true);
+      expect(await bcrypt.compare('newPassword123', account.passwordHash)).toBe(
+        true,
+      );
       expect(accounts.save).toHaveBeenCalledWith(account);
     });
 
     it('rejects an unknown token', async () => {
       passwordResetTokens.findOne.mockResolvedValue(null);
-      await expect(service.resetPassword('bogus', 'newPassword123')).rejects.toThrow(ValidationError);
+      await expect(
+        service.resetPassword('bogus', 'newPassword123'),
+      ).rejects.toThrow(ValidationError);
       expect(accounts.save).not.toHaveBeenCalled();
     });
 
@@ -479,7 +526,9 @@ describe('AuthService', () => {
       record.consume();
       passwordResetTokens.findOne.mockResolvedValue(record);
 
-      await expect(service.resetPassword(record.token, 'newPassword123')).rejects.toThrow(ValidationError);
+      await expect(
+        service.resetPassword(record.token, 'newPassword123'),
+      ).rejects.toThrow(ValidationError);
       expect(accounts.save).not.toHaveBeenCalled();
     });
 
@@ -488,7 +537,40 @@ describe('AuthService', () => {
       record.expiresAt = new Date(Date.now() - 1000);
       passwordResetTokens.findOne.mockResolvedValue(record);
 
-      await expect(service.resetPassword(record.token, 'newPassword123')).rejects.toThrow(ValidationError);
+      await expect(
+        service.resetPassword(record.token, 'newPassword123'),
+      ).rejects.toThrow(ValidationError);
+      expect(accounts.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('changePassword', () => {
+    const withPassword = async (password: string) => {
+      const account = new Account();
+      account.id = 'acc-1';
+      account.email = 'ana@test.com';
+      account.passwordHash = await bcrypt.hash(password, 4);
+      accounts.findOneOrFail.mockResolvedValue(account);
+      return account;
+    };
+
+    it('changes it when the current password is right', async () => {
+      const account = await withPassword('vieja1234');
+      await service.changePassword('acc-1', 'vieja1234', 'nueva5678');
+      expect(await bcrypt.compare('nueva5678', account.passwordHash)).toBe(
+        true,
+      );
+      expect(accounts.save).toHaveBeenCalledWith(account);
+    });
+
+    it('refuses a wrong current password, and the same password again', async () => {
+      await withPassword('vieja1234');
+      await expect(
+        service.changePassword('acc-1', 'equivocada', 'nueva5678'),
+      ).rejects.toThrow('La contraseña actual no es correcta.');
+      await expect(
+        service.changePassword('acc-1', 'vieja1234', 'vieja1234'),
+      ).rejects.toThrow(ValidationError);
       expect(accounts.save).not.toHaveBeenCalled();
     });
   });

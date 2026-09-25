@@ -18,8 +18,13 @@ export type PageTemplate = (typeof PAGE_TEMPLATES)[number];
 
 /** Both are already loaded by the app (see App.tsx) — offering a font
  * that isn't would just render as the system fallback. */
-export const PAGE_FONTS = ['display', 'soft'] as const;
+export const PAGE_FONTS = ['display', 'soft', 'rounded', 'elegant', 'handwritten'] as const;
 export type PageFont = (typeof PAGE_FONTS)[number];
+
+/** How big the page's text is. "large" helps pages read by older clients
+ * or on small phones. */
+export const PAGE_TEXT_SIZES = ['normal', 'large'] as const;
+export type PageTextSize = (typeof PAGE_TEXT_SIZES)[number];
 
 export const PAGE_SECTIONS = [
   'about',
@@ -89,6 +94,7 @@ export interface PageTestimonial {
 export interface PageDesign {
   template: PageTemplate;
   font: PageFont;
+  textSize: PageTextSize;
   primaryColor: string;
   backgroundColor: string;
   textColor: string;
@@ -115,6 +121,7 @@ const MAX_TESTIMONIAL_AUTHOR = 60;
 export const DEFAULT_PAGE_DESIGN: PageDesign = {
   template: 'classic',
   font: 'display',
+  textSize: 'normal',
   primaryColor: '#C8492A',
   backgroundColor: '#FBF6F1',
   textColor: '#261E2C',
@@ -238,6 +245,10 @@ export function parsePageDesign(input: unknown): PageDesign {
       raw.font === undefined
         ? DEFAULT_PAGE_DESIGN.font
         : assertOneOf(PAGE_FONTS, raw.font, 'La tipografía'),
+    textSize:
+      raw.textSize === undefined
+        ? DEFAULT_PAGE_DESIGN.textSize
+        : assertOneOf(PAGE_TEXT_SIZES, raw.textSize, 'El tamaño del texto'),
     primaryColor:
       raw.primaryColor === undefined
         ? DEFAULT_PAGE_DESIGN.primaryColor

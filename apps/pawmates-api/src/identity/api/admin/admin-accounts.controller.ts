@@ -4,6 +4,8 @@ import {
   JwtAuthGuard,
   ResourceNotFoundError,
   ValidationError,
+  sendEmail,
+  senderFields,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import {
@@ -12,7 +14,9 @@ import {
   Delete,
   Get,
   Param,
+  HttpCode,
   Patch,
+  Post,
   UseGuards,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -51,6 +55,36 @@ export class AdminAccountsController {
     private readonly deletion: AccountDeletionService,
     private readonly accountStatus: AccountStatusAdapter,
   ) {}
+
+  /**
+   * Sends a test email to the admin who asks, through the same sender the
+   * app uses for verification codes and password resets — so when someone
+   * says "the reset link never arrived", this shows whether mail goes out
+   * at all and, if not, why (Resend's own reason, in plain words).
+   */
+  @Post('email-test')
+  @HttpCode(200)
+  async emailTest(@CurrentAccount() current: AuthenticatedAccount) {
+    const me = await this.accounts.findOne({
+      where: { id: current.accountId },
+    });
+    if (!me) throw new ResourceNotFoundError('Tu cuenta no existe.');
+    const result = await sendEmail({
+      to: me.email,
+      subject: 'Correo de prueba de PawMates',
+      html: `<p>Si lees esto, los correos de PawMates están saliendo bien: los códigos de verificación y los enlaces para restablecer la contraseña también llegan.</p>`,
+    });
+    return {
+      data: {
+        ...result,
+        to: me.email,
+        from: senderFields().from,
+        // The test sender only delivers to the Resend account's own
+        // address — the usual reason mail reaches the admin but no one else.
+        usingTestSender: senderFields().from.includes('resend.dev'),
+      },
+    };
+  }
 
   @Get()
   async list() {
