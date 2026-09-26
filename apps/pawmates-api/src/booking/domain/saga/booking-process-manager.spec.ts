@@ -125,13 +125,46 @@ describe('BookingProcessManager', () => {
       expect(booking.priceBreakdown.totalAmount).toBeGreaterThan(0);
     });
 
-    it('prices a Meet & Greet line at zero regardless of the provider\'s rate', async () => {
+    it('books a chosen service for its own duration and keeps its name', async () => {
+      bookingsRepo.findOne.mockResolvedValue(null);
+      marketplace.checkAvailability.mockResolvedValue({
+        ...availability,
+        rate: Money.of(25000, 'USD'),
+        service: { id: 'svc0001', name: 'Paseo grupal', durationMinutes: 90 },
+      });
+
+      const booking = await manager.createBooking(
+        { ...cmd, lines: [{ ...cmd.lines[0], serviceId: 'svc0001' }] },
+        'trace-1',
+      );
+
+      expect(marketplace.checkAvailability).toHaveBeenCalledWith(
+        expect.objectContaining({ serviceId: 'svc0001' }),
+      );
+      // The app asked for 30 min; the service takes 90, and that's what
+      // the business is blocked for.
+      expect(noDoubleBooking.assertAvailable).toHaveBeenCalledWith(
+        'provider-1',
+        cmd.scheduledAt,
+        90,
+      );
+      expect(booking.lines[0]).toMatchObject({
+        serviceId: 'svc0001',
+        serviceName: 'Paseo grupal',
+        durationValue: 90,
+      });
+      expect(booking.priceBreakdown.rateAmount).toBe(25000);
+    });
+
+    it("prices a Meet & Greet line at zero regardless of the provider's rate", async () => {
       bookingsRepo.findOne.mockResolvedValue(null);
 
       const booking = await manager.createBooking(
         {
           ...cmd,
-          lines: [{ ...cmd.lines[0], serviceTypeCode: MEET_GREET_SERVICE_TYPE_CODE }],
+          lines: [
+            { ...cmd.lines[0], serviceTypeCode: MEET_GREET_SERVICE_TYPE_CODE },
+          ],
         },
         'trace-1',
       );

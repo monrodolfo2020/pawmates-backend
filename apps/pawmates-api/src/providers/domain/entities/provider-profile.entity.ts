@@ -24,8 +24,13 @@ import {
 import type { BusinessPlan } from '../value-objects/business-plan';
 import { assertBillingPeriod, periodEnd } from '../value-objects/billing';
 import type { BillingPeriod } from '../value-objects/billing';
-import { DEFAULT_PAGE_DESIGN, parsePageDesign } from '../value-objects/page-design';
+import {
+  DEFAULT_PAGE_DESIGN,
+  parsePageDesign,
+} from '../value-objects/page-design';
 import type { PageDesign } from '../value-objects/page-design';
+import { parseServices } from '../value-objects/service-catalog';
+import type { BusinessService } from '../value-objects/service-catalog';
 
 const MAX_BIO_LENGTH = 600;
 const MAX_SHORT_FIELD_LENGTH = 120;
@@ -60,11 +65,15 @@ function assertLongFieldValid(label: string, value: string): void {
 
 function assertAgeValid(age: number): void {
   if (!Number.isInteger(age) || age < MIN_AGE || age > MAX_AGE) {
-    throw new ValidationError(`La edad debe estar entre ${MIN_AGE} y ${MAX_AGE} años.`);
+    throw new ValidationError(
+      `La edad debe estar entre ${MIN_AGE} y ${MAX_AGE} años.`,
+    );
   }
 }
 
-function assertCategoryValid(category: string): asserts category is ServiceCategory {
+function assertCategoryValid(
+  category: string,
+): asserts category is ServiceCategory {
   if (!SERVICE_CATEGORIES.includes(category as ServiceCategory)) {
     throw new ValidationError('Esa categoría de servicio no existe.');
   }
@@ -153,6 +162,11 @@ export class ProviderProfile {
   // Public — what the provider actually offers/where, not personal data.
   @Column({ name: 'plans_offered', type: 'text', nullable: true })
   plansOffered!: string | null;
+
+  /** The structured list of services (see BusinessService). Null until
+   * the business first saves one. */
+  @Column({ name: 'services', type: 'simple-json', nullable: true })
+  servicesJson!: BusinessService[] | null;
 
   @Column({ name: 'walking_spots', type: 'text', nullable: true })
   walkingSpots!: string | null;
@@ -251,6 +265,18 @@ export class ProviderProfile {
       : null;
   }
 
+  get services(): BusinessService[] {
+    return this.servicesJson ?? [];
+  }
+
+  /** Whether a walker has anything to be booked at: a base rate, or at
+   * least one service with a price. */
+  get hasRate(): boolean {
+    return (
+      this.priceAmount !== null || this.services.some((s) => s.price !== null)
+    );
+  }
+
   get photos(): string[] {
     return this.photosJson ?? [];
   }
@@ -262,8 +288,11 @@ export class ProviderProfile {
     return normalizeDesign(this.designPublished);
   }
 
-    get draftDesign(): PageDesign {
-    return normalizeDesign(this.designDraft ?? this.designPublished) ?? DEFAULT_PAGE_DESIGN;
+  get draftDesign(): PageDesign {
+    return (
+      normalizeDesign(this.designDraft ?? this.designPublished) ??
+      DEFAULT_PAGE_DESIGN
+    );
   }
 
   /**
@@ -280,7 +309,10 @@ export class ProviderProfile {
    */
   isVip(now: Date = new Date()): boolean {
     if (this.plan !== 'vip') return false;
-    return this.planExpiresAt === null || this.planExpiresAt.getTime() > now.getTime();
+    return (
+      this.planExpiresAt === null ||
+      this.planExpiresAt.getTime() > now.getTime()
+    );
   }
 
   /** Days a newly approved business gets to use the editor for free. */
@@ -290,7 +322,9 @@ export class ProviderProfile {
    * Approving again (after taking the approval back) doesn't restart it. */
   startTrial(now: Date = new Date()): void {
     if (this.trialEndsAt !== null) return;
-    this.trialEndsAt = new Date(now.getTime() + ProviderProfile.TRIAL_DAYS * 24 * 60 * 60 * 1000);
+    this.trialEndsAt = new Date(
+      now.getTime() + ProviderProfile.TRIAL_DAYS * 24 * 60 * 60 * 1000,
+    );
   }
 
   /**
@@ -304,14 +338,24 @@ export class ProviderProfile {
     if (this.trialEndsAt === null || this.isVip(now)) return null;
     const left = this.trialEndsAt.getTime() - now.getTime();
     const due: TrialNotice | null =
-      left <= 0 ? 'ended' : left <= DAY_MS ? '1d' : left <= 7 * DAY_MS ? '7d' : null;
+      left <= 0
+        ? 'ended'
+        : left <= DAY_MS
+          ? '1d'
+          : left <= 7 * DAY_MS
+            ? '7d'
+            : null;
     if (due === null) return null;
-    const sent = this.trialNoticeStage ? TRIAL_NOTICES.indexOf(this.trialNoticeStage) : -1;
+    const sent = this.trialNoticeStage
+      ? TRIAL_NOTICES.indexOf(this.trialNoticeStage)
+      : -1;
     return TRIAL_NOTICES.indexOf(due) > sent ? due : null;
   }
 
   inTrial(now: Date = new Date()): boolean {
-    return this.trialEndsAt !== null && this.trialEndsAt.getTime() > now.getTime();
+    return (
+      this.trialEndsAt !== null && this.trialEndsAt.getTime() > now.getTime()
+    );
   }
 
   /**
@@ -342,7 +386,9 @@ export class ProviderProfile {
 
   get hasUnpublishedDesign(): boolean {
     if (!this.designDraft) return false;
-    return JSON.stringify(this.designDraft) !== JSON.stringify(this.designPublished);
+    return (
+      JSON.stringify(this.designDraft) !== JSON.stringify(this.designPublished)
+    );
   }
 
   /** The admin panel's manual switch. A hand-granted VIP never expires
@@ -369,7 +415,7 @@ export class ProviderProfile {
         ? this.planExpiresAt
         : now;
     this.plan = 'vip';
-    this.planExpiresAt = periodEnd(startFrom, period as BillingPeriod);
+    this.planExpiresAt = periodEnd(startFrom, period);
     return this.planExpiresAt;
   }
 
@@ -412,6 +458,7 @@ export class ProviderProfile {
     profile.priceAmount = null;
     profile.priceCurrency = null;
     profile.plansOffered = null;
+    profile.servicesJson = null;
     profile.latitude = null;
     profile.longitude = null;
     profile.approvedAt = null;
@@ -443,6 +490,7 @@ export class ProviderProfile {
     photo?: string | null;
     price?: Money | null;
     plansOffered?: string | null;
+    services?: unknown;
     latitude?: number | null;
     longitude?: number | null;
     walkingSpots?: string | null;
@@ -472,11 +520,13 @@ export class ProviderProfile {
       this.publicAddress = params.publicAddress;
     }
     if (params.hours !== undefined) {
-      if (params.hours !== null) assertLongFieldValid('Los horarios', params.hours);
+      if (params.hours !== null)
+        assertLongFieldValid('Los horarios', params.hours);
       this.hours = params.hours;
     }
     if (params.whatsapp !== undefined) {
-      if (params.whatsapp !== null) assertShortFieldValid('El WhatsApp', params.whatsapp);
+      if (params.whatsapp !== null)
+        assertShortFieldValid('El WhatsApp', params.whatsapp);
       this.whatsapp = params.whatsapp;
     }
     if (params.bio !== undefined) {
@@ -529,6 +579,9 @@ export class ProviderProfile {
       }
       this.plansOffered = params.plansOffered;
     }
+    if (params.services !== undefined) {
+      this.servicesJson = parseServices(params.services);
+    }
     if (params.walkingSpots !== undefined) {
       if (params.walkingSpots !== null) {
         assertLongFieldValid('Los parques o sitios', params.walkingSpots);
@@ -536,7 +589,8 @@ export class ProviderProfile {
       this.walkingSpots = params.walkingSpots;
     }
     if (params.address !== undefined) {
-      if (params.address !== null) assertLongFieldValid('La dirección', params.address);
+      if (params.address !== null)
+        assertLongFieldValid('La dirección', params.address);
       this.address = params.address;
     }
     if (params.idNumber !== undefined) {
@@ -550,13 +604,14 @@ export class ProviderProfile {
       this.age = params.age;
     }
     if (params.phone !== undefined) {
-      if (params.phone !== null) assertShortFieldValid('El teléfono', params.phone);
+      if (params.phone !== null)
+        assertShortFieldValid('El teléfono', params.phone);
       this.phone = params.phone;
     }
     this.isPublished = Boolean(
       this.bio &&
-        this.businessName &&
-        (!requiresRate(this.category) || this.priceAmount !== null),
+      this.businessName &&
+      (!requiresRate(this.category) || this.hasRate),
     );
   }
 }

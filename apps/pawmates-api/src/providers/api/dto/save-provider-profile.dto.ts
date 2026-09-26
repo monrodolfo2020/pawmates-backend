@@ -89,6 +89,12 @@ export class SaveProviderProfileDto {
   @IsOptional()
   plansOffered?: string;
 
+  /** The whole list, replacing the stored one; validated by
+   * parseServices (see BusinessService). */
+  @IsArray()
+  @IsOptional()
+  services?: unknown[];
+
   @IsString()
   @IsOptional()
   walkingSpots?: string;

@@ -1,6 +1,9 @@
 import { Money, ValidationError } from '@pawmates/common';
 import { ProviderProfile } from './provider-profile.entity';
-import { DEFAULT_PAGE_DESIGN, PAGE_SECTIONS } from '../value-objects/page-design';
+import {
+  DEFAULT_PAGE_DESIGN,
+  PAGE_SECTIONS,
+} from '../value-objects/page-design';
 
 /** An approved business whose free month of the editor is long gone. */
 function pastTrial(): ProviderProfile {
@@ -17,6 +20,83 @@ describe('ProviderProfile aggregate', () => {
     expect(profile.accountId).toBe('account-1');
     expect(profile.isPublished).toBe(false);
     expect(profile.price).toBeNull();
+  });
+
+  describe('services', () => {
+    const row = (over: Record<string, unknown> = {}) => ({
+      id: 'svc0001',
+      name: 'Paseo individual',
+      detail: '',
+      price: 15000,
+      durationMinutes: 60,
+      ...over,
+    });
+
+    it('stores a clean list and drops empty rows', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.update({
+        services: [
+          row({ name: '  Paseo individual ' }),
+          { id: 'svc0002', name: ' ', detail: '' },
+        ],
+      });
+      expect(profile.services).toEqual([row()]);
+    });
+
+    it('allows no price and no duration', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.update({
+        services: [row({ price: null, durationMinutes: null })],
+      });
+      expect(profile.services[0]).toMatchObject({
+        price: null,
+        durationMinutes: null,
+      });
+    });
+
+    it.each([
+      [
+        [row({ name: '', detail: 'algo' })],
+        'Escribe el nombre del servicio 1.',
+      ],
+      [[row({ price: 0 })], 'El precio del servicio 1 no es válido.'],
+      [[row({ price: 10.5 })], 'El precio del servicio 1 no es válido.'],
+      [
+        [row({ durationMinutes: 2 })],
+        'La duración del servicio 1 debe estar entre 5 minutos y 24 horas.',
+      ],
+      [[row(), row()], 'El servicio 2 no es válido.'],
+      [[row({ id: 'X!' })], 'El servicio 1 no es válido.'],
+      [
+        Array.from({ length: 21 }, (_, i) => row({ id: `svc${1000 + i}` })),
+        'Puedes tener como máximo 20 servicios.',
+      ],
+    ])('refuses a bad list (%#)', (services, message) => {
+      const profile = ProviderProfile.draft('account-1');
+      expect(() => profile.update({ services })).toThrow(
+        new ValidationError(message),
+      );
+    });
+
+    it('publishes a walker with a priced service and no base rate', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.update({
+        businessName: 'Paseos Lucía',
+        bio: 'Paseadora.',
+        services: [row()],
+      });
+      expect(profile.isPublished).toBe(true);
+    });
+
+    it('does not count a service without a price as a rate', () => {
+      const profile = ProviderProfile.draft('account-1');
+      profile.update({
+        businessName: 'Paseos Lucía',
+        bio: 'Paseadora.',
+        services: [row({ price: null })],
+      });
+      expect(profile.isPublished).toBe(false);
+    });
   });
 
   it('stays unpublished with only a bio set', () => {
@@ -77,17 +157,24 @@ describe('ProviderProfile aggregate', () => {
 
   it('rejects an unknown category', () => {
     const profile = ProviderProfile.draft('account-1');
-    expect(() => profile.update({ category: 'taquería' })).toThrow(ValidationError);
+    expect(() => profile.update({ category: 'taquería' })).toThrow(
+      ValidationError,
+    );
   });
 
   it('keeps the gallery as a list and caps it at 8 photos', () => {
     const profile = ProviderProfile.draft('account-1');
     expect(profile.photos).toEqual([]);
-    profile.update({ photos: ['https://blob.test/a.jpg', 'https://blob.test/b.jpg'] });
-    expect(profile.photos).toEqual(['https://blob.test/a.jpg', 'https://blob.test/b.jpg']);
-    expect(() => profile.update({ photos: new Array(9).fill('https://blob.test/x.jpg') })).toThrow(
-      ValidationError,
-    );
+    profile.update({
+      photos: ['https://blob.test/a.jpg', 'https://blob.test/b.jpg'],
+    });
+    expect(profile.photos).toEqual([
+      'https://blob.test/a.jpg',
+      'https://blob.test/b.jpg',
+    ]);
+    expect(() =>
+      profile.update({ photos: new Array(9).fill('https://blob.test/x.jpg') }),
+    ).toThrow(ValidationError);
   });
 
   it('accepts the micro-page contact fields', () => {
@@ -104,7 +191,11 @@ describe('ProviderProfile aggregate', () => {
 
   it('leaves omitted fields untouched', () => {
     const profile = ProviderProfile.draft('account-1');
-    profile.update({ bio: 'Bio', serviceArea: 'Roma Norte', specialty: 'Perros grandes' });
+    profile.update({
+      bio: 'Bio',
+      serviceArea: 'Roma Norte',
+      specialty: 'Perros grandes',
+    });
     profile.update({ price: Money.of(1000, 'MXN') });
     expect(profile.bio).toBe('Bio');
     expect(profile.serviceArea).toBe('Roma Norte');
@@ -118,7 +209,9 @@ describe('ProviderProfile aggregate', () => {
 
   it('rejects a bio over 600 characters', () => {
     const profile = ProviderProfile.draft('account-1');
-    expect(() => profile.update({ bio: 'x'.repeat(601) })).toThrow(ValidationError);
+    expect(() => profile.update({ bio: 'x'.repeat(601) })).toThrow(
+      ValidationError,
+    );
   });
 
   it('rejects an empty service area', () => {
@@ -128,7 +221,12 @@ describe('ProviderProfile aggregate', () => {
 
   it('accepts the private trust/verification fields without affecting publish state', () => {
     const profile = ProviderProfile.draft('account-1');
-    profile.update({ address: 'Calle Falsa 123', idNumber: 'INE-ABC123', age: 30, phone: '5512345678' });
+    profile.update({
+      address: 'Calle Falsa 123',
+      idNumber: 'INE-ABC123',
+      age: 30,
+      phone: '5512345678',
+    });
     expect(profile.address).toBe('Calle Falsa 123');
     expect(profile.idNumber).toBe('INE-ABC123');
     expect(profile.age).toBe(30);
@@ -143,7 +241,7 @@ describe('ProviderProfile aggregate', () => {
   });
 
   describe('plan and page design', () => {
-    it('starts on the free plan with PawMates\' own design', () => {
+    it("starts on the free plan with PawMates' own design", () => {
       const profile = ProviderProfile.draft('account-1');
       expect(profile.plan).toBe('free');
       expect(profile.effectiveDesign).toEqual(DEFAULT_PAGE_DESIGN);
@@ -152,7 +250,9 @@ describe('ProviderProfile aggregate', () => {
 
     it('refuses to customize the page on the free plan once the trial is over', () => {
       const profile = pastTrial();
-      expect(() => profile.saveDesignDraft({ template: 'gallery' })).toThrow(ValidationError);
+      expect(() => profile.saveDesignDraft({ template: 'gallery' })).toThrow(
+        ValidationError,
+      );
       expect(() => profile.publishDesign()).toThrow(ValidationError);
     });
 
@@ -192,35 +292,60 @@ describe('ProviderProfile aggregate', () => {
     it('rejects an invalid template, font or color', () => {
       const profile = ProviderProfile.draft('account-1');
       profile.setPlan('vip');
-      expect(() => profile.saveDesignDraft({ template: 'neon' })).toThrow(ValidationError);
-      expect(() => profile.saveDesignDraft({ font: 'comic' })).toThrow(ValidationError);
-      expect(() => profile.saveDesignDraft({ primaryColor: 'rojo' })).toThrow(ValidationError);
-      expect(() => profile.saveDesignDraft({ textSize: 'enorme' })).toThrow(ValidationError);
+      expect(() => profile.saveDesignDraft({ template: 'neon' })).toThrow(
+        ValidationError,
+      );
+      expect(() => profile.saveDesignDraft({ font: 'comic' })).toThrow(
+        ValidationError,
+      );
+      expect(() => profile.saveDesignDraft({ primaryColor: 'rojo' })).toThrow(
+        ValidationError,
+      );
+      expect(() => profile.saveDesignDraft({ textSize: 'enorme' })).toThrow(
+        ValidationError,
+      );
       profile.saveDesignDraft({ font: 'handwritten', textSize: 'large' });
-      expect(profile.draftDesign).toMatchObject({ font: 'handwritten', textSize: 'large' });
+      expect(profile.draftDesign).toMatchObject({
+        font: 'handwritten',
+        textSize: 'large',
+      });
     });
 
     it('fills in sections the client left out instead of dropping them', () => {
       const profile = ProviderProfile.draft('account-1');
       profile.setPlan('vip');
-      profile.saveDesignDraft({ sections: [{ id: 'gallery', enabled: false }] });
+      profile.saveDesignDraft({
+        sections: [{ id: 'gallery', enabled: false }],
+      });
 
       const ids = profile.draftDesign.sections.map((s) => s.id);
       expect(ids[0]).toBe('gallery'); // the order the client sent wins
       expect(new Set(ids)).toEqual(new Set(PAGE_SECTIONS));
-      expect(profile.draftDesign.sections.find((s) => s.id === 'gallery')?.enabled).toBe(false);
-      expect(profile.draftDesign.sections.find((s) => s.id === 'hours')?.enabled).toBe(true);
+      expect(
+        profile.draftDesign.sections.find((s) => s.id === 'gallery')?.enabled,
+      ).toBe(false);
+      expect(
+        profile.draftDesign.sections.find((s) => s.id === 'hours')?.enabled,
+      ).toBe(true);
     });
 
     it('caps testimonials and requires text on each', () => {
       const profile = ProviderProfile.draft('account-1');
       profile.setPlan('vip');
-      profile.saveDesignDraft({ testimonials: [{ text: 'Excelente trato', author: 'Ana' }] });
-      expect(profile.draftDesign.testimonials).toEqual([{ text: 'Excelente trato', author: 'Ana' }]);
+      profile.saveDesignDraft({
+        testimonials: [{ text: 'Excelente trato', author: 'Ana' }],
+      });
+      expect(profile.draftDesign.testimonials).toEqual([
+        { text: 'Excelente trato', author: 'Ana' },
+      ]);
 
-      expect(() => profile.saveDesignDraft({ testimonials: [{ author: 'Ana' }] })).toThrow(ValidationError);
       expect(() =>
-        profile.saveDesignDraft({ testimonials: new Array(7).fill({ text: 'x', author: 'y' }) }),
+        profile.saveDesignDraft({ testimonials: [{ author: 'Ana' }] }),
+      ).toThrow(ValidationError);
+      expect(() =>
+        profile.saveDesignDraft({
+          testimonials: new Array(7).fill({ text: 'x', author: 'y' }),
+        }),
       ).toThrow(ValidationError);
     });
   });
@@ -228,7 +353,11 @@ describe('ProviderProfile aggregate', () => {
   describe('approval', () => {
     const complete = () => {
       const profile = ProviderProfile.draft('account-1');
-      profile.update({ category: 'vet', businessName: 'Vet', bio: 'Consultas.' });
+      profile.update({
+        category: 'vet',
+        businessName: 'Vet',
+        bio: 'Consultas.',
+      });
       return profile;
     };
 
@@ -275,18 +404,26 @@ describe('ProviderProfile aggregate', () => {
 
     it('refuses half a coordinate — a point nowhere is worse than no point', () => {
       const profile = ProviderProfile.draft('account-1');
-      expect(() => profile.update({ latitude: 19.4126 })).toThrow(ValidationError);
-      expect(() => profile.update({ longitude: -99.1732 })).toThrow(ValidationError);
+      expect(() => profile.update({ latitude: 19.4126 })).toThrow(
+        ValidationError,
+      );
+      expect(() => profile.update({ longitude: -99.1732 })).toThrow(
+        ValidationError,
+      );
       expect(profile.latitude).toBeNull();
     });
 
     it('rejects coordinates outside the globe', () => {
       const profile = ProviderProfile.draft('account-1');
-      expect(() => profile.update({ latitude: 91, longitude: 0 })).toThrow(ValidationError);
-      expect(() => profile.update({ latitude: 0, longitude: 181 })).toThrow(ValidationError);
-      expect(() => profile.update({ latitude: Number.NaN, longitude: 0 })).toThrow(
+      expect(() => profile.update({ latitude: 91, longitude: 0 })).toThrow(
         ValidationError,
       );
+      expect(() => profile.update({ latitude: 0, longitude: 181 })).toThrow(
+        ValidationError,
+      );
+      expect(() =>
+        profile.update({ latitude: Number.NaN, longitude: 0 }),
+      ).toThrow(ValidationError);
     });
 
     it('leaves the location alone when neither is mentioned', () => {
@@ -332,7 +469,9 @@ describe('ProviderProfile aggregate', () => {
 
         jest.setSystemTime(new Date('2026-06-01T00:00:00Z')); // VIP ran out Apr 10
         expect(profile.effectiveDesign).toEqual(DEFAULT_PAGE_DESIGN);
-        expect(() => profile.saveDesignDraft({ template: 'gallery' })).toThrow(ValidationError);
+        expect(() => profile.saveDesignDraft({ template: 'gallery' })).toThrow(
+          ValidationError,
+        );
 
         profile.activateVip('monthly');
         expect(profile.effectiveDesign.template).toBe('minimal');
@@ -388,7 +527,9 @@ describe('ProviderProfile aggregate', () => {
       plansOffered: 'Paseo individual 30 min, plan semanal 3x',
       walkingSpots: 'Parque México, Parque España',
     });
-    expect(profile.plansOffered).toBe('Paseo individual 30 min, plan semanal 3x');
+    expect(profile.plansOffered).toBe(
+      'Paseo individual 30 min, plan semanal 3x',
+    );
     expect(profile.walkingSpots).toBe('Parque México, Parque España');
   });
 
@@ -409,7 +550,9 @@ describe('ProviderProfile aggregate', () => {
       profile.startTrial(approvedOn);
       expect(profile.trialEndsAt).toEqual(new Date('2026-04-09T12:00:00Z'));
       expect(profile.canCustomize(new Date('2026-04-09T11:59:00Z'))).toBe(true);
-      expect(profile.canCustomize(new Date('2026-04-09T12:00:00Z'))).toBe(false);
+      expect(profile.canCustomize(new Date('2026-04-09T12:00:00Z'))).toBe(
+        false,
+      );
 
       profile.startTrial(new Date('2026-05-01T00:00:00Z'));
       expect(profile.trialEndsAt).toEqual(new Date('2026-04-09T12:00:00Z'));
@@ -427,7 +570,9 @@ describe('ProviderProfile aggregate', () => {
 
         jest.setSystemTime(new Date('2026-04-20T00:00:00Z'));
         expect(profile.effectiveDesign).toEqual(DEFAULT_PAGE_DESIGN);
-        expect(() => profile.saveDesignDraft({ template: 'gallery' })).toThrow(ValidationError);
+        expect(() => profile.saveDesignDraft({ template: 'gallery' })).toThrow(
+          ValidationError,
+        );
 
         profile.activateVip('monthly');
         expect(profile.effectiveDesign.template).toBe('minimal');
@@ -442,17 +587,40 @@ describe('ProviderProfile aggregate', () => {
       const profile = ProviderProfile.draft('account-1');
       profile.saveDesignDraft({
         sections: [
-          { id: 'b1', type: 'hero', enabled: true, data: { title: '  Paseos con cariño ', subtitle: 'En Metepec' } },
+          {
+            id: 'b1',
+            type: 'hero',
+            enabled: true,
+            data: { title: '  Paseos con cariño ', subtitle: 'En Metepec' },
+          },
           { id: 'about', enabled: true },
-          { id: 'b2', type: 'prices', enabled: true, data: { items: [{ name: 'Paseo 30 min', detail: '', price: '$100' }, { name: '', detail: '' }] } },
+          {
+            id: 'b2',
+            type: 'prices',
+            enabled: true,
+            data: {
+              items: [
+                { name: 'Paseo 30 min', detail: '', price: '$100' },
+                { name: '', detail: '' },
+              ],
+            },
+          },
         ],
       });
       const sections = profile.draftDesign.sections;
-      expect(sections.slice(0, 3).map((s) => s.id)).toEqual(['b1', 'about', 'b2']);
+      expect(sections.slice(0, 3).map((s) => s.id)).toEqual([
+        'b1',
+        'about',
+        'b2',
+      ]);
       expect(sections[0].data?.title).toBe('Paseos con cariño');
-      expect(sections[2].data?.items).toEqual([{ name: 'Paseo 30 min', detail: '', price: '$100' }]);
+      expect(sections[2].data?.items).toEqual([
+        { name: 'Paseo 30 min', detail: '', price: '$100' },
+      ]);
       // Built-in sections the client left out are still there.
-      expect(new Set(sections.filter((s) => !s.data).map((s) => s.id))).toEqual(new Set(PAGE_SECTIONS));
+      expect(new Set(sections.filter((s) => !s.data).map((s) => s.id))).toEqual(
+        new Set(PAGE_SECTIONS),
+      );
     });
 
     it('reads designs saved before blocks existed', () => {
@@ -461,24 +629,51 @@ describe('ProviderProfile aggregate', () => {
         ...DEFAULT_PAGE_DESIGN,
         sections: [{ id: 'gallery', enabled: false }],
       } as never;
-      const gallery = profile.effectiveDesign.sections.find((s) => s.id === 'gallery');
-      expect(gallery).toEqual({ id: 'gallery', type: 'gallery', enabled: false });
+      const gallery = profile.effectiveDesign.sections.find(
+        (s) => s.id === 'gallery',
+      );
+      expect(gallery).toEqual({
+        id: 'gallery',
+        type: 'gallery',
+        enabled: false,
+      });
     });
 
     it('rejects content that is too long, a bad link or a bad date', () => {
       const profile = ProviderProfile.draft('account-1');
-      const block = (type: string, data: unknown) => ({ sections: [{ id: 'x1', type, enabled: true, data }] });
-      expect(() => profile.saveDesignDraft(block('hero', { title: 'a'.repeat(81) }))).toThrow(ValidationError);
-      expect(() => profile.saveDesignDraft(block('video', { url: 'javascript:alert(1)' }))).toThrow(ValidationError);
-      expect(() => profile.saveDesignDraft(block('social', { instagram: 'hola mundo' }))).toThrow(ValidationError);
-      expect(() => profile.saveDesignDraft(block('promo', { until: 'mañana' }))).toThrow(ValidationError);
-      expect(() => profile.saveDesignDraft(block('promo', { title: '2x1', until: '2026-12-31' }))).not.toThrow();
+      const block = (type: string, data: unknown) => ({
+        sections: [{ id: 'x1', type, enabled: true, data }],
+      });
+      expect(() =>
+        profile.saveDesignDraft(block('hero', { title: 'a'.repeat(81) })),
+      ).toThrow(ValidationError);
+      expect(() =>
+        profile.saveDesignDraft(block('video', { url: 'javascript:alert(1)' })),
+      ).toThrow(ValidationError);
+      expect(() =>
+        profile.saveDesignDraft(block('social', { instagram: 'hola mundo' })),
+      ).toThrow(ValidationError);
+      expect(() =>
+        profile.saveDesignDraft(block('promo', { until: 'mañana' })),
+      ).toThrow(ValidationError);
+      expect(() =>
+        profile.saveDesignDraft(
+          block('promo', { title: '2x1', until: '2026-12-31' }),
+        ),
+      ).not.toThrow();
     });
 
     it('caps the number of added blocks', () => {
       const profile = ProviderProfile.draft('account-1');
-      const sections = Array.from({ length: 21 }, (_, i) => ({ id: `b${i}`, type: 'text', enabled: true, data: {} }));
-      expect(() => profile.saveDesignDraft({ sections })).toThrow(ValidationError);
+      const sections = Array.from({ length: 21 }, (_, i) => ({
+        id: `b${i}`,
+        type: 'text',
+        enabled: true,
+        data: {},
+      }));
+      expect(() => profile.saveDesignDraft({ sections })).toThrow(
+        ValidationError,
+      );
     });
   });
 
@@ -489,7 +684,8 @@ describe('ProviderProfile aggregate', () => {
       profile.trialEndsAt = ends;
       return profile;
     };
-    const daysBefore = (d: number) => new Date(ends.getTime() - d * 24 * 60 * 60 * 1000);
+    const daysBefore = (d: number) =>
+      new Date(ends.getTime() - d * 24 * 60 * 60 * 1000);
 
     it('sends a week before, the day before, and at the end — each once', () => {
       const profile = trialing();

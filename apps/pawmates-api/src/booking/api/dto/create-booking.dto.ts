@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsUUID,
+  Matches,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -27,6 +28,12 @@ export class BookingLineDto {
 
   @IsUUID()
   addressId!: string;
+
+  /** One of the business's services (BusinessService.id). When present,
+   * the booking is priced and timed from that service. */
+  @Matches(/^[a-z0-9]{4,24}$/)
+  @IsOptional()
+  serviceId?: string;
 }
 
 /** Mirrors API Design doc §04 — POST /v1/bookings. */

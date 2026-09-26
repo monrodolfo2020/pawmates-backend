@@ -4,6 +4,7 @@ export interface CreateBookingLineCommand {
   durationValue: number;
   durationUnit: 'min' | 'hour' | 'day';
   addressId: string;
+  serviceId?: string;
 }
 
 export interface CreateBookingCommand {

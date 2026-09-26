@@ -104,6 +104,8 @@ export class Booking {
       durationValue: number;
       durationUnit: 'min' | 'hour' | 'day';
       addressId: string;
+      serviceId?: string | null;
+      serviceName?: string | null;
     }>;
     recurrenceSeriesId?: string;
   }): Booking {
@@ -119,7 +121,7 @@ export class Booking {
     booking.completedAt = null;
     booking.lines = params.lines.map((line) => {
       const l = new BookingLine();
-      Object.assign(l, line);
+      Object.assign(l, { serviceId: null, serviceName: null }, line);
       return l;
     });
     return booking;
@@ -128,7 +130,8 @@ export class Booking {
   private transitionTo(next: BookingStatus): void {
     if (!canTransition(this.status, next)) {
       throw new BookingInvalidTransitionError(
-        TRANSITION_MESSAGES[next] ?? 'Esta reserva no puede cambiar a ese estado.',
+        TRANSITION_MESSAGES[next] ??
+          'Esta reserva no puede cambiar a ese estado.',
       );
     }
     this.status = next;
@@ -197,8 +200,10 @@ export class Booking {
 /** What the person sees when a transition is refused, keyed by what
  * they were trying to do. */
 const TRANSITION_MESSAGES: Partial<Record<BookingStatus, string>> = {
-  [BookingStatus.InProgress]: 'Solo se puede iniciar un paseo confirmado que no haya empezado.',
-  [BookingStatus.Completed]: 'Solo se puede terminar un paseo que está en curso.',
+  [BookingStatus.InProgress]:
+    'Solo se puede iniciar un paseo confirmado que no haya empezado.',
+  [BookingStatus.Completed]:
+    'Solo se puede terminar un paseo que está en curso.',
   [BookingStatus.Confirmed]: 'Esta solicitud ya no está pendiente.',
   [BookingStatus.Cancelled]: 'Esta reserva ya no se puede cancelar.',
 };

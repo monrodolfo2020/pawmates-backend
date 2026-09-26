@@ -41,4 +41,13 @@ export class BookingLine {
 
   @Column({ name: 'address_id', type: 'text' })
   addressId!: string;
+
+  /** The business's service this line is for, and its name as it was
+   * when booked (see AddBookingLineService). Null for walks booked
+   * before services existed, and for a Meet & Greet. */
+  @Column({ name: 'service_id', type: 'text', nullable: true })
+  serviceId!: string | null;
+
+  @Column({ name: 'service_name', type: 'text', nullable: true })
+  serviceName!: string | null;
 }

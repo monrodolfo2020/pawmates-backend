@@ -11,14 +11,30 @@ import {
   micrositeQrPng,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
-import { Body, Controller, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Not, Repository } from 'typeorm';
 import { Account } from '../../identity/domain/entities/account.entity';
 import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
-import { ProviderProfile, PUBLICLY_VISIBLE } from '../domain/entities/provider-profile.entity';
-import { SERVICE_CATEGORIES, slugify } from '../domain/value-objects/service-category';
+import {
+  ProviderProfile,
+  PUBLICLY_VISIBLE,
+} from '../domain/entities/provider-profile.entity';
+import {
+  SERVICE_CATEGORIES,
+  slugify,
+} from '../domain/value-objects/service-category';
 import type { ServiceCategory } from '../domain/value-objects/service-category';
 import { SaveProviderProfileDto } from './dto/save-provider-profile.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
@@ -56,7 +72,9 @@ export class ProvidersController {
    * enough to filter instantly there without a round trip. */
   @Get()
   async list(@Query('category') category?: string) {
-    const isKnownCategory = SERVICE_CATEGORIES.includes(category as ServiceCategory);
+    const isKnownCategory = SERVICE_CATEGORIES.includes(
+      category as ServiceCategory,
+    );
     // A business waiting for an admin's approval can prepare its page,
     // but doesn't appear here yet.
     const rows = await this.profiles.find({
@@ -70,10 +88,16 @@ export class ProvidersController {
     const verifiedIds = await this.loadVerifiedIds(accountIds);
     // A suspended business drops out of the directory without being
     // unpublished, so re-enabling it brings the listing straight back.
-    const listed = rows.filter((p) => isActiveAccount(accountById.get(p.accountId)));
+    const listed = rows.filter((p) =>
+      isActiveAccount(accountById.get(p.accountId)),
+    );
     return {
       data: listed.map((p) =>
-        toDirectoryResponse(p, accountById.get(p.accountId), verifiedIds.has(p.accountId)),
+        toDirectoryResponse(
+          p,
+          accountById.get(p.accountId),
+          verifiedIds.has(p.accountId),
+        ),
       ),
     };
   }
@@ -83,7 +107,9 @@ export class ProvidersController {
   @UseGuards(JwtAuthGuard)
   async getMine(@CurrentAccount() account: AuthenticatedAccount) {
     assertProvider(account);
-    const profile = await this.profiles.findOne({ where: { accountId: account.accountId } });
+    const profile = await this.profiles.findOne({
+      where: { accountId: account.accountId },
+    });
     if (!profile) return { data: null };
     return { data: toOwnResponse(profile) };
   }
@@ -95,7 +121,9 @@ export class ProvidersController {
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
     assertProvider(account);
-    let profile = await this.profiles.findOne({ where: { accountId: account.accountId } });
+    let profile = await this.profiles.findOne({
+      where: { accountId: account.accountId },
+    });
     if (!profile) profile = ProviderProfile.draft(account.accountId);
 
     const photo =
@@ -115,39 +143,91 @@ export class ProvidersController {
         ? undefined
         : await Promise.all(
             dto.photos.map((entry) =>
-              isDataUrl(entry) ? uploadBase64Photo(entry, 'providers') : Promise.resolve(entry),
+              isDataUrl(entry)
+                ? uploadBase64Photo(entry, 'providers')
+                : Promise.resolve(entry),
             ),
           );
 
     profile.update({
       category: dto.category,
       businessName:
-        dto.businessName === undefined ? undefined : dto.businessName === '' ? null : dto.businessName,
+        dto.businessName === undefined
+          ? undefined
+          : dto.businessName === ''
+            ? null
+            : dto.businessName,
       photos,
       publicAddress:
-        dto.publicAddress === undefined ? undefined : dto.publicAddress === '' ? null : dto.publicAddress,
-      hours: dto.hours === undefined ? undefined : dto.hours === '' ? null : dto.hours,
-      whatsapp: dto.whatsapp === undefined ? undefined : dto.whatsapp === '' ? null : dto.whatsapp,
+        dto.publicAddress === undefined
+          ? undefined
+          : dto.publicAddress === ''
+            ? null
+            : dto.publicAddress,
+      hours:
+        dto.hours === undefined
+          ? undefined
+          : dto.hours === ''
+            ? null
+            : dto.hours,
+      whatsapp:
+        dto.whatsapp === undefined
+          ? undefined
+          : dto.whatsapp === ''
+            ? null
+            : dto.whatsapp,
       latitude: dto.latitude,
       longitude: dto.longitude,
       bio: dto.bio === undefined ? undefined : dto.bio === '' ? null : dto.bio,
       serviceArea:
-        dto.serviceArea === undefined ? undefined : dto.serviceArea === '' ? null : dto.serviceArea,
+        dto.serviceArea === undefined
+          ? undefined
+          : dto.serviceArea === ''
+            ? null
+            : dto.serviceArea,
       specialty:
-        dto.specialty === undefined ? undefined : dto.specialty === '' ? null : dto.specialty,
+        dto.specialty === undefined
+          ? undefined
+          : dto.specialty === ''
+            ? null
+            : dto.specialty,
       photo,
       price:
         dto.priceAmount === undefined
           ? undefined
           : Money.of(dto.priceAmount, dto.priceCurrency ?? 'MXN'),
       plansOffered:
-        dto.plansOffered === undefined ? undefined : dto.plansOffered === '' ? null : dto.plansOffered,
+        dto.plansOffered === undefined
+          ? undefined
+          : dto.plansOffered === ''
+            ? null
+            : dto.plansOffered,
+      services: dto.services,
       walkingSpots:
-        dto.walkingSpots === undefined ? undefined : dto.walkingSpots === '' ? null : dto.walkingSpots,
-      address: dto.address === undefined ? undefined : dto.address === '' ? null : dto.address,
-      idNumber: dto.idNumber === undefined ? undefined : dto.idNumber === '' ? null : dto.idNumber,
+        dto.walkingSpots === undefined
+          ? undefined
+          : dto.walkingSpots === ''
+            ? null
+            : dto.walkingSpots,
+      address:
+        dto.address === undefined
+          ? undefined
+          : dto.address === ''
+            ? null
+            : dto.address,
+      idNumber:
+        dto.idNumber === undefined
+          ? undefined
+          : dto.idNumber === ''
+            ? null
+            : dto.idNumber,
       age: dto.age === undefined ? undefined : dto.age,
-      phone: dto.phone === undefined ? undefined : dto.phone === '' ? null : dto.phone,
+      phone:
+        dto.phone === undefined
+          ? undefined
+          : dto.phone === ''
+            ? null
+            : dto.phone,
     });
     if (dto.design !== undefined) {
       profile.saveDesignDraft(await this.uploadDesignPhotos(dto.design));
@@ -163,9 +243,13 @@ export class ProvidersController {
   @UseGuards(JwtAuthGuard)
   async publishDesign(@CurrentAccount() account: AuthenticatedAccount) {
     assertProvider(account);
-    const profile = await this.profiles.findOne({ where: { accountId: account.accountId } });
+    const profile = await this.profiles.findOne({
+      where: { accountId: account.accountId },
+    });
     if (!profile) {
-      throw new ResourceNotFoundError('Todavía no tienes una página que publicar.');
+      throw new ResourceNotFoundError(
+        'Todavía no tienes una página que publicar.',
+      );
     }
     profile.publishDesign();
     await this.profiles.save(profile);
@@ -182,7 +266,11 @@ export class ProvidersController {
       typeof value === 'string' && isDataUrl(value)
         ? await uploadBase64Photo(value, 'providers')
         : value;
-    return { ...design, logo: await upload(design.logo), cover: await upload(design.cover) };
+    return {
+      ...design,
+      logo: await upload(design.logo),
+      cover: await upload(design.cover),
+    };
   }
 
   /**
@@ -251,7 +339,9 @@ export class ProvidersController {
     @CurrentAccount() account: AuthenticatedAccount,
   ) {
     assertProvider(account);
-    if (!isCurrentVersion('identity_verification_consent', dto.consentVersion)) {
+    if (
+      !isCurrentVersion('identity_verification_consent', dto.consentVersion)
+    ) {
       throw new ValidationError(
         'El consentimiento de verificación cambió. Vuelve a cargar la aplicación.',
       );
@@ -295,16 +385,18 @@ export class ProvidersController {
       }
     }
 
-    await this.legalAcceptances.save(
-      LegalAcceptance.record({
-        accountId: account.accountId,
-        documentType: 'identity_verification_consent',
-        documentVersion: dto.consentVersion,
-      }),
-    ).catch(() => {
-      // Already on file from signup — the unique index says so, and
-      // re-consenting to the same version is not a new fact.
-    });
+    await this.legalAcceptances
+      .save(
+        LegalAcceptance.record({
+          accountId: account.accountId,
+          documentType: 'identity_verification_consent',
+          documentVersion: dto.consentVersion,
+        }),
+      )
+      .catch(() => {
+        // Already on file from signup — the unique index says so, and
+        // re-consenting to the same version is not a new fact.
+      });
 
     return { data: { status: verification.status } };
   }
@@ -322,7 +414,10 @@ export class ProvidersController {
     if (!/^[a-z0-9-]{1,80}$/.test(slug)) {
       throw new ResourceNotFoundError('Esa página no existe.');
     }
-    const exists = await this.profiles.findOne({ where: { slug }, select: { id: true } });
+    const exists = await this.profiles.findOne({
+      where: { slug },
+      select: { id: true },
+    });
     if (!exists) {
       throw new ResourceNotFoundError('Esa página no existe.');
     }
@@ -340,7 +435,9 @@ export class ProvidersController {
       where: { ...PUBLICLY_VISIBLE, slug },
     });
     if (!profile) {
-      throw new ResourceNotFoundError('Esta página no existe o todavía no está publicada.');
+      throw new ResourceNotFoundError(
+        'Esta página no existe o todavía no está publicada.',
+      );
     }
     return { data: await this.detailFor(profile) };
   }
@@ -353,18 +450,24 @@ export class ProvidersController {
       where: { ...PUBLICLY_VISIBLE, accountId },
     });
     if (!profile) {
-      throw new ResourceNotFoundError('Este negocio todavía no tiene una página publicada.');
+      throw new ResourceNotFoundError(
+        'Este negocio todavía no tiene una página publicada.',
+      );
     }
     return { data: await this.detailFor(profile) };
   }
 
   private async detailFor(profile: ProviderProfile) {
-    const account = await this.accounts.findOne({ where: { id: profile.accountId } });
+    const account = await this.accounts.findOne({
+      where: { id: profile.accountId },
+    });
     // Same message as a page that doesn't exist: a visitor following a
     // shared link has no reason to learn that this business was
     // suspended, and the business has no reason to want them to.
     if (!isActiveAccount(account ?? undefined)) {
-      throw new ResourceNotFoundError('Esta página no existe o todavía no está publicada.');
+      throw new ResourceNotFoundError(
+        'Esta página no existe o todavía no está publicada.',
+      );
     }
     const verified = await this.verifications.findOne({
       where: { accountId: profile.accountId, status: 'verified' },
@@ -372,7 +475,9 @@ export class ProvidersController {
     return toDetailResponse(profile, account, verified !== null);
   }
 
-  private async loadAccounts(accountIds: string[]): Promise<Map<string, Account>> {
+  private async loadAccounts(
+    accountIds: string[],
+  ): Promise<Map<string, Account>> {
     if (!accountIds.length) return new Map();
     const rows = await this.accounts.find({ where: { id: In(accountIds) } });
     return new Map(rows.map((a) => [a.id, a]));
@@ -395,7 +500,10 @@ function assertProvider(account: AuthenticatedAccount): void {
 
 /** The business's own name wins; the account holder's name is the
  * fallback for profiles created before businessName existed. */
-function displayName(profile: ProviderProfile, account: Account | null | undefined): string {
+function displayName(
+  profile: ProviderProfile,
+  account: Account | null | undefined,
+): string {
   return profile.businessName ?? account?.name ?? 'Negocio';
 }
 
@@ -421,6 +529,7 @@ function toDirectoryResponse(
     specialty: profile.specialty,
     price: profile.price,
     plansOffered: profile.plansOffered,
+    services: profile.services,
     walkingSpots: profile.walkingSpots,
     // Boolean trust signals, not PII — safe to show a shopper, unlike
     // the actual address/idNumber/age/phone above. identityVerified
@@ -433,7 +542,11 @@ function toDirectoryResponse(
 }
 
 // Same private-field exclusion as toDirectoryResponse above.
-function toDetailResponse(profile: ProviderProfile, account: Account | null, identityVerified: boolean) {
+function toDetailResponse(
+  profile: ProviderProfile,
+  account: Account | null,
+  identityVerified: boolean,
+) {
   return {
     accountId: profile.accountId,
     name: displayName(profile, account),
@@ -451,6 +564,7 @@ function toDetailResponse(profile: ProviderProfile, account: Account | null, ide
     specialty: profile.specialty,
     price: profile.price,
     plansOffered: profile.plansOffered,
+    services: profile.services,
     walkingSpots: profile.walkingSpots,
     // A lapsed VIP is a free page, and says so — `plan` here is what's
     // in force, not what's stored (see ProviderProfile.isVip).
@@ -481,6 +595,7 @@ function toOwnResponse(profile: ProviderProfile) {
     specialty: profile.specialty,
     price: profile.price,
     plansOffered: profile.plansOffered,
+    services: profile.services,
     walkingSpots: profile.walkingSpots,
     address: profile.address,
     idNumber: profile.idNumber,

@@ -1,4 +1,4 @@
-import { Money } from '@pawmates/common';
+import { Money, ValidationError } from '@pawmates/common';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -34,13 +34,26 @@ export class ProviderMarketplaceAdapter implements MarketplacePort {
 
   async checkAvailability(params: {
     providerServiceId: string;
+    serviceId?: string;
   }): Promise<AvailabilityCheck> {
     // Same bar as the public directory: a business the admin hasn't
     // approved yet can't be found there, so it can't be booked either.
     const profile = await this.profiles.findOne({
       where: { ...PUBLICLY_VISIBLE, accountId: params.providerServiceId },
     });
-    if (!profile || !profile.price) {
+    // A service the business removed (or never had) is refused rather
+    // than quietly booked at the base rate: the owner picked a price.
+    const service = params.serviceId
+      ? profile?.services.find((s) => s.id === params.serviceId)
+      : undefined;
+    if (profile && params.serviceId && !service) {
+      throw new ValidationError(
+        'Ese servicio ya no está disponible. Vuelve a elegirlo.',
+      );
+    }
+    const rate =
+      service?.price != null ? Money.of(service.price, 'MXN') : profile?.price;
+    if (!profile || !rate) {
       return {
         available: false,
         providerId: params.providerServiceId,
@@ -52,12 +65,19 @@ export class ProviderMarketplaceAdapter implements MarketplacePort {
     return {
       available: true,
       providerId: profile.accountId,
-      rate: profile.price,
+      rate,
       // PawMates charges businesses a subscription, never a cut of their
       // work (Acuerdo de prestadores, cláusula 3.3) — a booking carries
       // the business's own rate and nothing on top.
-      commission: Money.zero(profile.price.currency),
-      tax: Money.zero(profile.price.currency),
+      commission: Money.zero(rate.currency),
+      tax: Money.zero(rate.currency),
+      service: service
+        ? {
+            id: service.id,
+            name: service.name,
+            durationMinutes: service.durationMinutes,
+          }
+        : undefined,
     };
   }
 }

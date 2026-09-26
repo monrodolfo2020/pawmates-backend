@@ -36,7 +36,8 @@ import { longestDurationMinutes } from './duration';
 // free Meet & Greet request rather than a paid walk. Must match
 // MEET_GREET_SERVICE_TYPE_CODE in the frontend's api/client.ts —
 // checked by the app repo's scripts/check-shared-lists.mjs, which CI runs.
-export const MEET_GREET_SERVICE_TYPE_CODE = '00000000-0000-4000-8000-0000000000c1';
+export const MEET_GREET_SERVICE_TYPE_CODE =
+  '00000000-0000-4000-8000-0000000000c1';
 
 /**
  * BookingProcessManager — the saga orchestrator (Architecture doc ADR-05).
@@ -77,20 +78,41 @@ export class BookingProcessManager {
         'La reserva necesita al menos una mascota y servicio.',
       );
     }
-    const durationMinutes = longestDurationMinutes(cmd.lines);
+    // One booking is for one service; any line naming one names it.
+    const serviceId = cmd.lines.find((line) => line.serviceId)?.serviceId;
 
     // 1. Synchronous validations (Architecture §11, gRPC) — fail fast,
     //    before ever touching this service's own database.
     const availability = await this.marketplace.checkAvailability({
       providerServiceId: cmd.providerServiceId,
       scheduledAt: cmd.scheduledAt,
-      durationMinutes,
+      durationMinutes: longestDurationMinutes(cmd.lines),
+      serviceId,
     });
     if (!availability.available) {
       throw new ValidationError(
         'Este negocio no está recibiendo solicitudes por ahora.',
       );
     }
+
+    // A service with a set duration is booked for that long, whatever
+    // the app sent — it's what the business is blocking out.
+    const service = availability.service;
+    const lines = cmd.lines.map((line) =>
+      service && line.serviceId === service.id
+        ? {
+            ...line,
+            serviceName: service.name,
+            ...(service.durationMinutes
+              ? {
+                  durationValue: service.durationMinutes,
+                  durationUnit: 'min' as const,
+                }
+              : {}),
+          }
+        : { ...line, serviceId: undefined },
+    );
+    const durationMinutes = longestDurationMinutes(lines);
 
     const verification = await this.trustSafety.checkVerificationValid({
       accountId: availability.providerId,
@@ -116,7 +138,7 @@ export class BookingProcessManager {
       providerId: availability.providerId,
       scheduledAt: cmd.scheduledAt,
       idempotencyKey: cmd.idempotencyKey,
-      lines: cmd.lines,
+      lines,
       recurrenceSeriesId: cmd.recurrenceSeriesId,
     });
 
@@ -134,7 +156,9 @@ export class BookingProcessManager {
     // Tips are between the owner and the business, paid however they
     // agree — the app doesn't invent one (Términos para dueños, §8).
     const tipEstimate = zero;
-    const total = isMeetGreet ? zero : rate.add(commission).add(tax).add(tipEstimate);
+    const total = isMeetGreet
+      ? zero
+      : rate.add(commission).add(tax).add(tipEstimate);
     const priceBreakdown = PriceBreakdown.create({
       bookingId: booking.id,
       rate,

@@ -31,7 +31,9 @@ describe('NoDoubleBookingPolicy (integration)', () => {
   let dbAvailable = true;
 
   beforeAll(async () => {
-    try { fs.unlinkSync(TEST_DB_FILE); } catch {}
+    try {
+      fs.unlinkSync(TEST_DB_FILE);
+    } catch {}
     dataSource = new DataSource({
       ...libsqlConnectionOptions(),
       database: TEST_DB_FILE,
@@ -61,7 +63,8 @@ describe('NoDoubleBookingPolicy (integration)', () => {
         CREATE TABLE booking_booking_lines (
           id text PRIMARY KEY, booking_id text NOT NULL, pet_id text NOT NULL,
           service_type_code text NOT NULL, duration_value int NOT NULL,
-          duration_unit text NOT NULL, address_id text NOT NULL
+          duration_unit text NOT NULL, address_id text NOT NULL,
+          service_id text NULL, service_name text NULL
         )
       `);
       policy = new NoDoubleBookingPolicy(dataSource.getRepository(Booking));
@@ -76,7 +79,9 @@ describe('NoDoubleBookingPolicy (integration)', () => {
 
   afterAll(async () => {
     if (dbAvailable) await dataSource.destroy();
-    try { fs.unlinkSync(TEST_DB_FILE); } catch {}
+    try {
+      fs.unlinkSync(TEST_DB_FILE);
+    } catch {}
   });
 
   beforeEach(async () => {
