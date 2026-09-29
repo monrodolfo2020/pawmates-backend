@@ -12,6 +12,7 @@ import { PasswordResetToken } from '../domain/entities/password-reset-token.enti
 import { Pet } from '../domain/entities/pet.entity';
 import { ProviderVerification } from '../domain/entities/provider-verification.entity';
 import { ProviderProfile } from '../../providers/domain/entities/provider-profile.entity';
+import { Review } from '../../providers/domain/entities/review.entity';
 import { Booking } from '../../booking/domain/entities/booking.entity';
 import { TripLocation } from '../../booking/domain/entities/trip-location.entity';
 import { AccountStatusAdapter } from '../infra/adapters/account-status.adapter';
@@ -37,6 +38,8 @@ export const TABLES_ON_ACCOUNT_DELETION: Record<string, string> = {
   identity_email_verification_codes: 'deleted',
   identity_password_reset_tokens: 'deleted',
   providers_profiles: 'deleted',
+  providers_reviews:
+    'deleted: the ones they wrote, and the ones about their business',
   booking_trip_locations:
     'deleted for walks they did as a business (where they were)',
   rate_limits: 'deleted (counters keyed by their email or id)',
@@ -93,7 +96,8 @@ const BATCH = 500;
  *   the evidence of consent if a dispute ever comes up.
  *
  * Everything else goes: the account, its pets, its business page (which
- * also frees its link), its identity verification, its pending email
+ * also frees its link), the reviews it wrote and the ones about its
+ * business, its identity verification, its pending email
  * and password-reset codes, and — as location data that belongs to the
  * walker — the GPS trail of walks it did as a paseador. Photos are
  * removed from storage too.
@@ -201,6 +205,10 @@ export class AccountDeletionService {
     await manager.delete(EmailVerificationCode, { accountId });
     await manager.delete(PasswordResetToken, { accountId });
     await manager.delete(ProviderProfile, { accountId });
+    // Their words go with them; and with the business gone, so do the
+    // reviews of it — there's no page left for them to be on.
+    await manager.delete(Review, { ownerId: accountId });
+    await manager.delete(Review, { providerId: accountId });
     await manager.delete(Account, { id: accountId });
   }
 

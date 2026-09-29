@@ -44,6 +44,10 @@ import {
   photoFeedback,
 } from '../../identity/domain/face-match';
 import { LegalAcceptance } from '../../identity/domain/entities/legal-acceptance.entity';
+import { Review } from '../domain/entities/review.entity';
+import { rankByRating } from '../domain/value-objects/review-ranking';
+import type { RatingSummary } from '../domain/value-objects/review-ranking';
+import { loadRatings, publicRating } from './ratings';
 import {
   LEGAL_DOCUMENT_VERSIONS,
   isCurrentVersion,
@@ -65,11 +69,13 @@ export class ProvidersController {
     private readonly verifications: Repository<ProviderVerification>,
     @InjectRepository(LegalAcceptance)
     private readonly legalAcceptances: Repository<LegalAcceptance>,
+    @InjectRepository(Review) private readonly reviews: Repository<Review>,
   ) {}
 
   /** Public directory — only published profiles, optionally narrowed to
-   * one category. Free-text search stays on the client: the list is small
-   * enough to filter instantly there without a round trip. */
+   * one category, best rated first (see review-ranking.ts). Free-text
+   * search stays on the client: the list is small enough to filter
+   * instantly there without a round trip. */
   @Get()
   async list(@Query('category') category?: string) {
     const isKnownCategory = SERVICE_CATEGORIES.includes(
@@ -91,12 +97,18 @@ export class ProvidersController {
     const listed = rows.filter((p) =>
       isActiveAccount(accountById.get(p.accountId)),
     );
+    const ratings = await loadRatings(
+      this.reviews,
+      listed.map((p) => p.accountId),
+    );
+    const ranked = rankByRating(listed, (p) => ratings.get(p.accountId) ?? null);
     return {
-      data: listed.map((p) =>
+      data: ranked.map((p) =>
         toDirectoryResponse(
           p,
           accountById.get(p.accountId),
           verifiedIds.has(p.accountId),
+          ratings.get(p.accountId),
         ),
       ),
     };
@@ -472,7 +484,13 @@ export class ProvidersController {
     const verified = await this.verifications.findOne({
       where: { accountId: profile.accountId, status: 'verified' },
     });
-    return toDetailResponse(profile, account, verified !== null);
+    const ratings = await loadRatings(this.reviews, [profile.accountId]);
+    return toDetailResponse(
+      profile,
+      account,
+      verified !== null,
+      ratings.get(profile.accountId),
+    );
   }
 
   private async loadAccounts(
@@ -514,6 +532,7 @@ function toDirectoryResponse(
   profile: ProviderProfile,
   account: Account | undefined,
   identityVerified: boolean,
+  rating?: RatingSummary,
 ) {
   return {
     accountId: profile.accountId,
@@ -538,6 +557,8 @@ function toDirectoryResponse(
     // themselves (those never leave the admin surface).
     emailVerified: account?.emailVerifiedAt != null,
     identityVerified,
+    // Bones, 1 to 5 — null until the first review.
+    rating: publicRating(rating),
   };
 }
 
@@ -546,6 +567,7 @@ function toDetailResponse(
   profile: ProviderProfile,
   account: Account | null,
   identityVerified: boolean,
+  rating?: RatingSummary,
 ) {
   return {
     accountId: profile.accountId,
@@ -572,6 +594,8 @@ function toDetailResponse(
     design: profile.effectiveDesign,
     emailVerified: account?.emailVerifiedAt != null,
     identityVerified,
+    // Bones, 1 to 5 — null until the first review.
+    rating: publicRating(rating),
   };
 }
 

@@ -33,6 +33,14 @@ export function requiresRate(category: ServiceCategory): boolean {
   return category === 'walker';
 }
 
+/** Booked inside PawMates (the rest are contacted directly). Decides how
+ * a business is reviewed: a bookable one only by owners it served, one
+ * review per booking; the others by any owner with a verified email, one
+ * review per business. Must match isBookable in the app. */
+export function isBookable(category: ServiceCategory): boolean {
+  return category === 'walker';
+}
+
 /**
  * URL-safe id for a business's shareable micro-page (/s/<slug>).
  * Accent-folded so "Estética Canina Güero" becomes "estetica-canina-guero"

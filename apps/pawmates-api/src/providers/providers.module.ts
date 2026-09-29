@@ -15,6 +15,9 @@ import { Account } from '../identity/domain/entities/account.entity';
 import { ProviderVerification } from '../identity/domain/entities/provider-verification.entity';
 import { LegalAcceptance } from '../identity/domain/entities/legal-acceptance.entity';
 import { CronController } from './api/cron.controller';
+import { ReviewsController } from './api/reviews.controller';
+import { Review } from './domain/entities/review.entity';
+import { Booking } from '../booking/domain/entities/booking.entity';
 import { TrialRemindersService } from './api/trial-reminders.service';
 
 /**
@@ -43,6 +46,10 @@ import { TrialRemindersService } from './api/trial-reminders.service';
       // Written when a provider sends its identity photos from inside
       // the app: that consent has to be recorded like any other.
       LegalAcceptance,
+      Review,
+      // Read-only: a walker is reviewed per booking, so writing a review
+      // checks that the booking is the owner's and already took place.
+      Booking,
     ]),
   ],
   controllers: [
@@ -52,6 +59,7 @@ import { TrialRemindersService } from './api/trial-reminders.service';
     AdminBusinessesController,
     AdminPlanCodesController,
     CronController,
+    ReviewsController,
   ],
   providers: [
     ProviderMarketplaceAdapter,
