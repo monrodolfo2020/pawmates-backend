@@ -401,9 +401,9 @@ export class AuthService {
 
     await sendEmail({
       to: previous,
-      subject: 'Cambiaste el correo de tu cuenta de PawMates',
+      subject: 'Cambiaste el correo de tu cuenta de PET Conect@',
       html: `
-        <p>El correo de tu cuenta de PawMates ahora es <strong>${escapeHtml(account.email)}</strong>.</p>
+        <p>El correo de tu cuenta de PET Conect@ ahora es <strong>${escapeHtml(account.email)}</strong>.</p>
         <p>Si tú no hiciste este cambio, responde a este correo o escríbenos cuanto antes.</p>
       `,
     });

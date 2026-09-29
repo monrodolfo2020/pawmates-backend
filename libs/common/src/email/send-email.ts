@@ -13,7 +13,7 @@ const RESEND_API_URL = () =>
  */
 export function senderFields(): { from: string; reply_to?: string } {
   const from =
-    process.env.EMAIL_FROM?.trim() || 'PawMates <onboarding@resend.dev>';
+    process.env.EMAIL_FROM?.trim() || '"PET Conect@" <onboarding@resend.dev>';
   const replyTo = process.env.EMAIL_REPLY_TO?.trim();
   return replyTo ? { from, reply_to: replyTo } : { from };
 }

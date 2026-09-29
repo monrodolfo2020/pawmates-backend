@@ -83,8 +83,8 @@ describe('TrialRemindersService (integration)', () => {
     ]);
     expect(to).toEqual(
       expect.arrayContaining([
-        ['week@t.app', 'Te quedan 7 días de prueba gratis en PawMates'],
-        ['tomorrow@t.app', 'Mañana termina tu prueba gratis en PawMates'],
+        ['week@t.app', 'Te quedan 7 días de prueba gratis en PET Conect@'],
+        ['tomorrow@t.app', 'Mañana termina tu prueba gratis en PET Conect@'],
         ['over@t.app', 'Terminó tu prueba gratis: tu diseño está guardado'],
       ]),
     );

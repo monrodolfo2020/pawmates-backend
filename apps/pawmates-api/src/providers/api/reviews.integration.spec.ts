@@ -188,6 +188,6 @@ describe('ReviewsController (integration)', () => {
   it('shortens names so a customer is not published in full', () => {
     expect(shortName('Ana García López')).toBe('Ana G.');
     expect(shortName('Beto')).toBe('Beto');
-    expect(shortName(null)).toBe('Dueño de PawMates');
+    expect(shortName(null)).toBe('Dueño de PET Conect@');
   });
 });

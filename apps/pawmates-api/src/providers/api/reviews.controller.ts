@@ -186,7 +186,7 @@ function toOwnReview(r: Review) {
  * publishing a customer's full name on a business's page. */
 export function shortName(name: string | null | undefined): string {
   const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return 'Dueño de PawMates';
+  if (parts.length === 0) return 'Dueño de PET Conect@';
   if (parts.length === 1) return parts[0];
   return `${parts[0]} ${parts[1][0].toUpperCase()}.`;
 }

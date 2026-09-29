@@ -101,7 +101,7 @@ describe('emailPhotoFeedback', () => {
     ];
     expect(email).toBe('lulu@t.app');
     expect(content.subject).toBe(
-      'Revisa las fotos de tu verificación en PawMates',
+      'Revisa las fotos de tu verificación en PET Conect@',
     );
     expect(content.html).toContain('Estética &lt;Lulú&gt;');
     expect(content.html).not.toMatch(/41|%/);
