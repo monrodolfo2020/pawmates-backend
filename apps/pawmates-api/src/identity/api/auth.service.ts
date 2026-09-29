@@ -5,6 +5,8 @@ import {
   ResourceNotFoundError,
   ValidationError,
   sendVerificationEmail,
+  sendEmail,
+  escapeHtml,
   sendPasswordResetEmail,
   sendBusinessWelcomeEmail,
   sendNewBusinessPendingEmail,
@@ -322,7 +324,8 @@ export class AuthService {
     const record = await this.verificationCodes.findOne({
       where: { accountId },
     });
-    if (!record) {
+    // A code sent to a new address proves that one, not the current one.
+    if (!record || record.newEmail !== null) {
       throw new ValidationError('Pide un código nuevo antes de verificar.');
     }
     record.assertValid(code);
@@ -331,6 +334,89 @@ export class AuthService {
 
     account.markEmailVerified();
     await this.accounts.save(account);
+  }
+
+  /**
+   * First step of changing the account's email: the current password
+   * proves it's really them, and a code goes to the new address, which
+   * stays unconfirmed — the email doesn't change — until that code comes
+   * back through confirmEmailChange.
+   */
+  async requestEmailChange(
+    accountId: string,
+    password: string,
+    newEmail: string,
+  ): Promise<void> {
+    const account = await this.accounts.findOneOrFail({
+      where: { id: accountId },
+    });
+    if (!(await bcrypt.compare(password, account.passwordHash))) {
+      throw new ValidationError('La contraseña no es correcta.');
+    }
+    const email = newEmail.trim().toLowerCase();
+    if (email === account.email.toLowerCase()) {
+      throw new ValidationError('Ese ya es tu correo.');
+    }
+    await this.assertEmailAvailable(email);
+
+    const existing = await this.verificationCodes.findOne({
+      where: { accountId },
+    });
+    const record = existing ?? EmailVerificationCode.issue(accountId, email);
+    if (existing) record.reissue(email);
+    await this.verificationCodes.save(record);
+
+    try {
+      await sendVerificationEmail(email, record.code);
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo enviar el código de cambio de correo a ${email}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /** Second step: the code sent to the new address makes it the account's
+   * email, already verified. The old address is told, in case it wasn't
+   * them. */
+  async confirmEmailChange(accountId: string, code: string): Promise<string> {
+    const account = await this.accounts.findOneOrFail({
+      where: { id: accountId },
+    });
+    const record = await this.verificationCodes.findOne({
+      where: { accountId },
+    });
+    if (!record || record.newEmail === null) {
+      throw new ValidationError('Pide un código nuevo para cambiar tu correo.');
+    }
+    record.assertValid(code);
+    // Someone may have signed up with it while the code was on its way.
+    await this.assertEmailAvailable(record.newEmail);
+
+    const previous = account.email;
+    account.email = record.newEmail;
+    account.markEmailVerified();
+    record.consume();
+    await this.accounts.save(account);
+    await this.verificationCodes.save(record);
+
+    await sendEmail({
+      to: previous,
+      subject: 'Cambiaste el correo de tu cuenta de PawMates',
+      html: `
+        <p>El correo de tu cuenta de PawMates ahora es <strong>${escapeHtml(account.email)}</strong>.</p>
+        <p>Si tú no hiciste este cambio, responde a este correo o escríbenos cuanto antes.</p>
+      `,
+    });
+    return account.email;
+  }
+
+  private async assertEmailAvailable(email: string): Promise<void> {
+    const taken = await this.accounts.findOne({ where: { email } });
+    if (taken) {
+      throw new EmailAlreadyRegisteredError(
+        'Ya existe una cuenta con ese correo.',
+      );
+    }
   }
 
   /** Always succeeds from the caller's perspective, whether or not the
@@ -404,15 +490,10 @@ export class AuthService {
     const existing = await this.verificationCodes.findOne({
       where: { accountId: account.id },
     });
+    // Overwrite in place — one active code per account (unique
+    // account_id), so re-issuing means replacing, not inserting.
     const record = existing ?? EmailVerificationCode.issue(account.id);
-    if (existing) {
-      // Overwrite in place — one active code per account (unique
-      // account_id), so re-issuing means replacing, not inserting.
-      const fresh = EmailVerificationCode.issue(account.id);
-      record.code = fresh.code;
-      record.expiresAt = fresh.expiresAt;
-      record.consumedAt = null;
-    }
+    if (existing) record.reissue();
     await this.verificationCodes.save(record);
 
     try {

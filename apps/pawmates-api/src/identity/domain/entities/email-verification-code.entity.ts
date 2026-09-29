@@ -1,10 +1,5 @@
 import { ValidationError } from '@pawmates/common';
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  PrimaryColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryColumn } from 'typeorm';
 import { ulid } from 'ulid';
 
 const CODE_LENGTH = 6;
@@ -46,17 +41,33 @@ export class EmailVerificationCode {
   @Column({ name: 'consumed_at', type: 'datetime', nullable: true })
   consumedAt!: Date | null;
 
+  /** Set when the code confirms a change of address rather than the
+   * current one: it was sent to this address, and entering it makes this
+   * the account's email. Null for the signup verification. */
+  @Column({ name: 'new_email', type: 'text', nullable: true })
+  newEmail!: string | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
-  static issue(accountId: string): EmailVerificationCode {
+  static issue(
+    accountId: string,
+    newEmail: string | null = null,
+  ): EmailVerificationCode {
     const entity = new EmailVerificationCode();
     entity.id = ulid().toLowerCase();
     entity.accountId = accountId;
-    entity.code = generateCode();
-    entity.expiresAt = new Date(Date.now() + EXPIRY_MINUTES * 60_000);
-    entity.consumedAt = null;
+    entity.reissue(newEmail);
     return entity;
+  }
+
+  /** A fresh code on the same row — one active code per account, so a
+   * new one (for either purpose) replaces whatever was pending. */
+  reissue(newEmail: string | null = null): void {
+    this.code = generateCode();
+    this.expiresAt = new Date(Date.now() + EXPIRY_MINUTES * 60_000);
+    this.consumedAt = null;
+    this.newEmail = newEmail;
   }
 
   /** Throws rather than returning a bool — every caller needs the same
