@@ -1,4 +1,9 @@
-import { CurrentAccount, JwtAuthGuard } from '@pawmates/common';
+import {
+  ClientIp,
+  CurrentAccount,
+  JwtAuthGuard,
+  ValidationError,
+} from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
 import {
   Body,
@@ -16,7 +21,12 @@ import { Account } from '../domain/entities/account.entity';
 import { AuthService } from './auth.service';
 import { RateLimiter } from '../../infra/rate-limit/rate-limiter';
 import { RATE_LIMITS } from '../../infra/rate-limit/rate-limit-rules';
-import { ChangePasswordDto, UpdateMeDto } from './dto/update-me.dto';
+import {
+  ChangePasswordDto,
+  ConfirmEmailChangeDto,
+  RequestEmailChangeDto,
+  UpdateMeDto,
+} from './dto/update-me.dto';
 
 @Controller('v1/me')
 @UseGuards(JwtAuthGuard)
@@ -28,8 +38,8 @@ export class MeController {
   ) {}
 
   /** Changes the name shown on the account (the Perfil screen). The email
-   * isn't editable here: changing it needs a verification of the new
-   * address, which an admin can do for now (AdminAccountsController). */
+   * changes through POST /v1/me/email and /email/confirm, below, since
+   * the new address has to be proven first. */
   @Patch()
   async update(
     @CurrentAccount() account: AuthenticatedAccount,
@@ -67,6 +77,68 @@ export class MeController {
     }
     await this.limiter.clear(RATE_LIMITS.loginPerAccount, found.email);
     return { data: { changed: true } };
+  }
+
+  /** Asks to change the account's email: checks the password and sends
+   * a code to the new address. Nothing changes until it's confirmed. */
+  @Post('email')
+  @HttpCode(200)
+  async requestEmailChange(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Body() dto: RequestEmailChangeDto,
+    @ClientIp() ip: string,
+  ) {
+    const found = await this.accounts.findOneOrFail({
+      where: { id: account.accountId },
+    });
+    // Guessing the password here must be no easier than at Login, and
+    // the codes sent count against the same email budget as any other.
+    await this.limiter.assertAllowed(RATE_LIMITS.loginPerAccount, found.email);
+    await this.limiter.consume(RATE_LIMITS.emailPerAddress, account.accountId);
+    await this.limiter.consume(RATE_LIMITS.emailPerIp, ip);
+    try {
+      await this.auth.requestEmailChange(
+        account.accountId,
+        dto.password,
+        dto.newEmail,
+      );
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        await this.limiter.record(RATE_LIMITS.loginPerAccount, found.email);
+      }
+      throw error;
+    }
+    return { data: { sent: true } };
+  }
+
+  /** The code from the new address: makes it the account's email. */
+  @Post('email/confirm')
+  @HttpCode(200)
+  async confirmEmailChange(
+    @CurrentAccount() account: AuthenticatedAccount,
+    @Body() dto: ConfirmEmailChangeDto,
+  ) {
+    await this.limiter.assertAllowed(
+      RATE_LIMITS.verifyCodePerAccount,
+      account.accountId,
+    );
+    let email: string;
+    try {
+      email = await this.auth.confirmEmailChange(account.accountId, dto.code);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        await this.limiter.record(
+          RATE_LIMITS.verifyCodePerAccount,
+          account.accountId,
+        );
+      }
+      throw error;
+    }
+    await this.limiter.clear(
+      RATE_LIMITS.verifyCodePerAccount,
+      account.accountId,
+    );
+    return { data: { email, emailVerified: true } };
   }
 
   @Get()

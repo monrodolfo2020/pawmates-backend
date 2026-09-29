@@ -18,7 +18,11 @@ import { ProviderProfile } from '../../providers/domain/entities/provider-profil
 // Real uploads need a network call + BLOB_READ_WRITE_TOKEN — this only
 // verifies AuthService hands the right value to it, not the upload itself
 // (see blob-storage.ts's own tests, if any, for that).
-import { sendBusinessWelcomeEmail } from '@pawmates/common';
+import {
+  sendBusinessWelcomeEmail,
+  sendEmail,
+  sendVerificationEmail,
+} from '@pawmates/common';
 
 jest.mock('@pawmates/common', () => ({
   ...jest.requireActual('@pawmates/common'),
@@ -32,6 +36,8 @@ jest.mock('@pawmates/common', () => ({
     Promise.resolve(`${folder}/${dataUrl}.jpg`),
   ),
   sendBusinessWelcomeEmail: jest.fn(() => Promise.resolve({ sent: true })),
+  sendVerificationEmail: jest.fn(() => Promise.resolve()),
+  sendEmail: jest.fn(() => Promise.resolve({ sent: true })),
 }));
 
 /** The shape AuthController has already validated by the time it calls
@@ -572,6 +578,90 @@ describe('AuthService', () => {
         service.changePassword('acc-1', 'vieja1234', 'vieja1234'),
       ).rejects.toThrow(ValidationError);
       expect(accounts.save).not.toHaveBeenCalled();
+    });
+  });
+  describe('changing the email', () => {
+    const withAccount = async () => {
+      const account = new Account();
+      account.id = 'acc-1';
+      account.email = 'ana@test.com';
+      account.emailVerifiedAt = new Date();
+      account.passwordHash = await bcrypt.hash('clave1234', 4);
+      accounts.findOneOrFail.mockResolvedValue(account);
+      return account;
+    };
+
+    it('sends a code to the new address and changes nothing yet', async () => {
+      const account = await withAccount();
+      accounts.findOne.mockResolvedValue(null);
+      verificationCodes.findOne.mockResolvedValue(null);
+
+      await service.requestEmailChange(
+        'acc-1',
+        'clave1234',
+        ' Ana.Nueva@Test.com ',
+      );
+
+      const saved = verificationCodes.save.mock
+        .calls[0][0] as EmailVerificationCode;
+      expect(saved.newEmail).toBe('ana.nueva@test.com');
+      expect(sendVerificationEmail).toHaveBeenCalledWith(
+        'ana.nueva@test.com',
+        saved.code,
+      );
+      expect(account.email).toBe('ana@test.com');
+      expect(accounts.save).not.toHaveBeenCalled();
+    });
+
+    it('refuses a wrong password, the same address, and one already taken', async () => {
+      await withAccount();
+      await expect(
+        service.requestEmailChange('acc-1', 'otra', 'b@test.com'),
+      ).rejects.toThrow('La contraseña no es correcta.');
+      await expect(
+        service.requestEmailChange('acc-1', 'clave1234', 'ANA@test.com'),
+      ).rejects.toThrow(ValidationError);
+      accounts.findOne.mockResolvedValue(new Account());
+      await expect(
+        service.requestEmailChange('acc-1', 'clave1234', 'b@test.com'),
+      ).rejects.toThrow(EmailAlreadyRegisteredError);
+      expect(verificationCodes.save).not.toHaveBeenCalled();
+    });
+
+    it('switches to the new address with its code, and tells the old one', async () => {
+      const account = await withAccount();
+      accounts.findOne.mockResolvedValue(null);
+      const record = EmailVerificationCode.issue('acc-1', 'ana.nueva@test.com');
+      verificationCodes.findOne.mockResolvedValue(record);
+
+      const email = await service.confirmEmailChange('acc-1', record.code);
+
+      expect(email).toBe('ana.nueva@test.com');
+      expect(account.email).toBe('ana.nueva@test.com');
+      expect(account.emailVerifiedAt).not.toBeNull();
+      expect(record.consumedAt).not.toBeNull();
+      expect(sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'ana@test.com' }),
+      );
+    });
+
+    it('keeps the two kinds of code apart', async () => {
+      const account = await withAccount();
+      account.emailVerifiedAt = null;
+      accounts.findOne.mockResolvedValue(account);
+      const change = EmailVerificationCode.issue('acc-1', 'b@test.com');
+      verificationCodes.findOne.mockResolvedValue(change);
+      // A code sent to a new address doesn't verify the current one...
+      await expect(service.verifyEmail('acc-1', change.code)).rejects.toThrow(
+        ValidationError,
+      );
+      // ...and the signup code doesn't change the address.
+      const signup = EmailVerificationCode.issue('acc-1');
+      verificationCodes.findOne.mockResolvedValue(signup);
+      await expect(
+        service.confirmEmailChange('acc-1', signup.code),
+      ).rejects.toThrow(ValidationError);
+      expect(account.email).toBe('ana@test.com');
     });
   });
 });
