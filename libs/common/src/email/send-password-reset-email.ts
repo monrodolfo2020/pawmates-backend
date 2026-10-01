@@ -26,9 +26,9 @@ export async function sendPasswordResetEmail(
     body: JSON.stringify({
       ...senderFields(),
       to,
-      subject: 'Restablece tu contraseña de PawMates',
+      subject: 'Restablece tu contraseña de PET Conect@',
       html: `
-        <p>Recibimos una solicitud para restablecer tu contraseña de PawMates.</p>
+        <p>Recibimos una solicitud para restablecer tu contraseña de PET Conect@.</p>
         <p><a href="${resetLink}" style="font-size: 16px; font-weight: bold;">Restablecer mi contraseña</a></p>
         <p>Vence en 60 minutos. Si tú no pediste esto, ignora este correo — tu contraseña no cambiará.</p>
       `,

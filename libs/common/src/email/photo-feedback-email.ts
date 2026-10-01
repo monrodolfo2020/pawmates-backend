@@ -26,7 +26,7 @@ export function photoFeedbackEmailContent(params: {
   return {
     subject:
       params.feedback === 'mismatch'
-        ? 'Revisa las fotos de tu verificación en PawMates'
+        ? 'Revisa las fotos de tu verificación en PET Conect@'
         : 'Necesitamos otra foto para verificar tu identidad',
     html: `
       <p>Hola, <strong>${name}</strong>:</p>

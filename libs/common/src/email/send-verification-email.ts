@@ -35,9 +35,9 @@ export async function sendVerificationEmail(
     body: JSON.stringify({
       ...senderFields(),
       to,
-      subject: 'Tu código de verificación de PawMates',
+      subject: 'Tu código de verificación de PET Conect@',
       html: `
-        <p>Tu código de verificación de PawMates es:</p>
+        <p>Tu código de verificación de PET Conect@ es:</p>
         <p style="font-size: 28px; font-weight: bold; letter-spacing: 4px;">${code}</p>
         <p>Vence en 15 minutos. Si tú no pediste esto, ignora este correo.</p>
       `,

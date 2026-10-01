@@ -15,7 +15,7 @@ export function sendNewBusinessPendingEmail(params: {
     to: params.to,
     subject: `Nuevo negocio esperando aprobación: ${params.businessName}`,
     html: `
-      <p>Se registró un negocio nuevo en PawMates y está esperando tu aprobación para aparecer en el directorio.</p>
+      <p>Se registró un negocio nuevo en PET Conect@ y está esperando tu aprobación para aparecer en el directorio.</p>
       <p>
         <strong>${name}</strong><br/>
         ${escapeHtml(params.category)}<br/>
@@ -40,9 +40,9 @@ export function sendBusinessWelcomeEmail(params: {
   const name = escapeHtml(params.businessName);
   return sendEmail({
     to: params.to,
-    subject: `Recibimos el registro de ${params.businessName} en PawMates`,
+    subject: `Recibimos el registro de ${params.businessName} en PET Conect@`,
     html: `
-      <p>¡Hola! Registramos <strong>${name}</strong> en PawMates.</p>
+      <p>¡Hola! Registramos <strong>${name}</strong> en PET Conect@.</p>
       <p>Esto es lo que sigue:</p>
       <ol>
         <li><strong>Verifica tu correo</strong> con el código de 6 dígitos que te mandamos aparte.</li>
@@ -78,7 +78,7 @@ export function sendBusinessApprovedEmail(params: {
   const name = escapeHtml(params.businessName);
   const body = params.pageIsLive
     ? `
-      <p>¡Listo! <strong>${name}</strong> ya está en línea en PawMates.</p>
+      <p>¡Listo! <strong>${name}</strong> ya está en línea en PET Conect@.</p>
       <p>Este es el enlace de tu página. Compártelo en tus redes, por WhatsApp o con tus clientes:</p>
       <p><a href="${params.pageUrl}" style="font-size:16px;font-weight:bold;">${params.pageUrl}</a></p>
       <p>Y este es tu código QR. Imprímelo en tu mostrador, tus tarjetas o tus volantes: quien lo escanee llega directo a tu página.
@@ -86,7 +86,7 @@ export function sendBusinessApprovedEmail(params: {
       <p><img src="${params.qrImageUrl}" width="240" height="240" alt="Código QR de tu página" /></p>
     `
     : `
-      <p>¡Buenas noticias! Aprobamos <strong>${name}</strong> en PawMates.</p>
+      <p>¡Buenas noticias! Aprobamos <strong>${name}</strong> en PET Conect@.</p>
       <p>Solo falta que completes tu página —el nombre del negocio y una descripción— para que aparezca en el directorio.
       En cuanto lo hagas, este enlace mostrará tu página:</p>
       <p><a href="${params.pageUrl}">${params.pageUrl}</a></p>
@@ -96,8 +96,8 @@ export function sendBusinessApprovedEmail(params: {
   return sendEmail({
     to: params.to,
     subject: params.pageIsLive
-      ? `${params.businessName} ya está en línea en PawMates`
-      : `Aprobamos ${params.businessName} en PawMates`,
+      ? `${params.businessName} ya está en línea en PET Conect@`
+      : `Aprobamos ${params.businessName} en PET Conect@`,
     html: body,
     attachments: [{ filename: 'codigo-qr-pawmates.png', content: params.qrPngBase64 }],
   });

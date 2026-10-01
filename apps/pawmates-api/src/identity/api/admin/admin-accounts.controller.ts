@@ -71,8 +71,8 @@ export class AdminAccountsController {
     if (!me) throw new ResourceNotFoundError('Tu cuenta no existe.');
     const result = await sendEmail({
       to: me.email,
-      subject: 'Correo de prueba de PawMates',
-      html: `<p>Si lees esto, los correos de PawMates están saliendo bien: los códigos de verificación y los enlaces para restablecer la contraseña también llegan.</p>`,
+      subject: 'Correo de prueba de PET Conect@',
+      html: `<p>Si lees esto, los correos de PET Conect@ están saliendo bien: los códigos de verificación y los enlaces para restablecer la contraseña también llegan.</p>`,
     });
     return {
       data: {
