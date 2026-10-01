@@ -29,9 +29,9 @@ export const LEGAL_DOCUMENTS = [
 export type LegalDocumentType = (typeof LEGAL_DOCUMENTS)[number];
 
 export const LEGAL_DOCUMENT_VERSIONS: Record<LegalDocumentType, string> = {
-  privacy_notice: '1.1',
-  provider_agreement: '1.2',
-  owner_terms: '1.0',
+  privacy_notice: '1.2',
+  provider_agreement: '1.3',
+  owner_terms: '1.1',
   identity_verification_consent: '1.1',
 };
 
