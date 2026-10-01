@@ -545,6 +545,12 @@ function toDirectoryResponse(
     // a groomer's) — already public on its page; the directory card shows
     // it when there's no service area.
     publicAddress: profile.publicAddress,
+    // The map point the business placed itself at, already public on its
+    // page ("Cómo llegar"). Here so the app can show "a 2 km" and sort by
+    // distance on the shopper's own device, without ever sending us where
+    // the shopper is.
+    latitude: profile.latitude,
+    longitude: profile.longitude,
     specialty: profile.specialty,
     price: profile.price,
     plansOffered: profile.plansOffered,
