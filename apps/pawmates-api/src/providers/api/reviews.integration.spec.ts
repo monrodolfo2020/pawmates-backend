@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { DataSource } from 'typeorm';
 import {
   BookingNotEligibleForReviewError,
+  ResourceNotFoundError,
   RoleRequiredError,
 } from '@pawmates/common';
 import pawmatesDataSource from '../../infra/persistence/data-source';
@@ -183,6 +184,39 @@ describe('ReviewsController (integration)', () => {
     expect(ratings.get('vet')).toEqual({ average: 3.5, count: 2 });
     expect(ratings.get('walker')).toEqual({ average: 3, count: 1 });
     expect(ratings.has('nobody')).toBe(false);
+  });
+
+  it('lets the business answer a review of its own, publicly, without touching the review', async () => {
+    const before = (await controller.list('walker')).data[0];
+    const business = {
+      accountId: 'walker',
+      roles: ['provider'],
+      activeContext: 'provider' as const,
+    };
+    const { data } = await controller.reply(
+      before.id,
+      { reply: '  ¡Gracias! La próxima llegamos puntuales.  ' },
+      business,
+    );
+    expect(data.reply).toBe('¡Gracias! La próxima llegamos puntuales.');
+    expect(data.replyAt).not.toBeNull();
+
+    const after = (await controller.list('walker')).data[0];
+    expect(after.reply).toBe('¡Gracias! La próxima llegamos puntuales.');
+    expect(after.updatedAt).toEqual(before.updatedAt);
+
+    // Another business can't answer it, and an empty reply removes it.
+    await expect(
+      controller.reply(
+        before.id,
+        { reply: 'Hola' },
+        { ...business, accountId: 'vet' },
+      ),
+    ).rejects.toBeInstanceOf(ResourceNotFoundError);
+    await controller.reply(before.id, { reply: '' }, business);
+    const cleared = (await controller.list('walker')).data[0];
+    expect(cleared.reply).toBeNull();
+    expect(cleared.replyAt).toBeNull();
   });
 
   it('shortens names so a customer is not published in full', () => {

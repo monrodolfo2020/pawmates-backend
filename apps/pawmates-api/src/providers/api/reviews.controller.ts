@@ -7,7 +7,15 @@ import {
   ValidationError,
 } from '@pawmates/common';
 import type { AuthenticatedAccount } from '@pawmates/common';
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import { Account } from '../../identity/domain/entities/account.entity';
@@ -20,6 +28,7 @@ import {
 import { Review } from '../domain/entities/review.entity';
 import { isBookable } from '../domain/value-objects/service-category';
 import { WriteReviewDto } from './dto/write-review.dto';
+import { ReplyReviewDto } from './dto/reply-review.dto';
 import { loadRatings, publicRating } from './ratings';
 
 /** A booking that took place: the business accepted it and its time has
@@ -68,6 +77,8 @@ export class ReviewsController {
         authorName: shortName(nameOf.get(r.ownerId)),
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
+        reply: r.reply,
+        replyAt: r.replyAt,
       })),
       meta: { rating },
     };
@@ -83,6 +94,35 @@ export class ReviewsController {
       order: { createdAt: 'DESC' },
     });
     return { data: rows.map(toOwnReview) };
+  }
+
+  /** The business answers a review of its own, publicly. The update
+   * leaves the review's own updatedAt alone: the review didn't change. */
+  @Put('providers/me/reviews/:reviewId/reply')
+  @UseGuards(JwtAuthGuard)
+  async reply(
+    @Param('reviewId') reviewId: string,
+    @Body() dto: ReplyReviewDto,
+    @CurrentAccount() account: AuthenticatedAccount,
+  ) {
+    const review = await this.reviews.findOne({
+      where: { id: reviewId, providerId: account.accountId },
+    });
+    if (!review) {
+      throw new ResourceNotFoundError('Esa reseña no es de tu negocio.');
+    }
+    review.respond(dto.reply ?? null);
+    // Plain SQL so updated_at (the review's own edit date) stays as it is.
+    await this.reviews.query(
+      `UPDATE providers_reviews SET reply = ?, reply_at = CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END WHERE id = ?`,
+      [review.reply, review.reply, review.id],
+    );
+    const saved = await this.reviews.findOneOrFail({
+      where: { id: review.id },
+    });
+    return {
+      data: { id: saved.id, reply: saved.reply, replyAt: saved.replyAt },
+    };
   }
 
   /** Writes a review, or edits the one already there for the same
