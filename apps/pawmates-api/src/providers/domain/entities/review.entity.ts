@@ -42,6 +42,14 @@ export class Review {
   @Column({ type: 'text', nullable: true })
   comment!: string | null;
 
+  /** The business's public answer, shown under the review. One per
+   * review; writing again replaces it, and an empty one removes it. */
+  @Column({ type: 'text', nullable: true })
+  reply!: string | null;
+
+  @Column({ name: 'reply_at', type: 'datetime', nullable: true })
+  replyAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at', type: 'datetime' })
   createdAt!: Date;
 
@@ -82,5 +90,16 @@ export class Review {
     }
     this.rating = rating;
     this.comment = trimmed === '' ? null : trimmed;
+  }
+
+  respond(text: string | null, now: Date = new Date()): void {
+    const trimmed = text?.trim() ?? '';
+    if (trimmed.length > MAX_COMMENT_LENGTH) {
+      throw new ValidationError(
+        `La respuesta puede tener hasta ${MAX_COMMENT_LENGTH} caracteres.`,
+      );
+    }
+    this.reply = trimmed === '' ? null : trimmed;
+    this.replyAt = this.reply === null ? null : now;
   }
 }
