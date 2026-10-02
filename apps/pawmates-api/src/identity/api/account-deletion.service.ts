@@ -40,6 +40,7 @@ export const TABLES_ON_ACCOUNT_DELETION: Record<string, string> = {
   providers_profiles: 'deleted',
   providers_reviews:
     'deleted: the ones they wrote, and the ones about their business',
+  providers_page_stats: "deleted: their business page's visit counters",
   booking_trip_locations:
     'deleted for walks they did as a business (where they were)',
   rate_limits: 'deleted (counters keyed by their email or id)',
@@ -209,6 +210,10 @@ export class AccountDeletionService {
     // reviews of it — there's no page left for them to be on.
     await manager.delete(Review, { ownerId: accountId });
     await manager.delete(Review, { providerId: accountId });
+    await manager.query(
+      `DELETE FROM providers_page_stats WHERE provider_id = ?`,
+      [accountId],
+    );
     await manager.delete(Account, { id: accountId });
   }
 
