@@ -16,6 +16,7 @@ import { ProviderVerification } from '../identity/domain/entities/provider-verif
 import { LegalAcceptance } from '../identity/domain/entities/legal-acceptance.entity';
 import { CronController } from './api/cron.controller';
 import { ReviewsController } from './api/reviews.controller';
+import { PageStatsController } from './api/page-stats.controller';
 import { Review } from './domain/entities/review.entity';
 import { Booking } from '../booking/domain/entities/booking.entity';
 import { TrialRemindersService } from './api/trial-reminders.service';
@@ -60,6 +61,7 @@ import { TrialRemindersService } from './api/trial-reminders.service';
     AdminPlanCodesController,
     CronController,
     ReviewsController,
+    PageStatsController,
   ],
   providers: [
     ProviderMarketplaceAdapter,

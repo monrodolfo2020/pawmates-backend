@@ -70,6 +70,16 @@ export const RATE_LIMITS = {
   },
   /** Address lookups — Nominatim, the free service behind them, asks for
    * no more than about one request per second. */
+  /** A business's page statistics: the same visitor opening the page (or
+   * tapping WhatsApp) again within this window counts once, so a reload
+   * or a curious double tap doesn't inflate the numbers. Over the limit
+   * the event is simply not counted — nobody is told anything. */
+  pageEventPerVisitor: {
+    name: 'page-event',
+    max: 1,
+    windowMs: 30 * MINUTE,
+    message: 'Ya lo contamos.',
+  },
   geoPerIp: {
     name: 'geo-ip',
     max: 30,
