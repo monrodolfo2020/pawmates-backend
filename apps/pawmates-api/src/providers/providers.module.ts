@@ -18,6 +18,8 @@ import { CronController } from './api/cron.controller';
 import { ReviewsController } from './api/reviews.controller';
 import { PageStatsController } from './api/page-stats.controller';
 import { Review } from './domain/entities/review.entity';
+import { BusinessInvitation } from './domain/entities/business-invitation.entity';
+import { InvitationsController } from './api/invitations.controller';
 import { Booking } from '../booking/domain/entities/booking.entity';
 import { TrialRemindersService } from './api/trial-reminders.service';
 
@@ -48,6 +50,7 @@ import { TrialRemindersService } from './api/trial-reminders.service';
       // the app: that consent has to be recorded like any other.
       LegalAcceptance,
       Review,
+      BusinessInvitation,
       // Read-only: a walker is reviewed per booking, so writing a review
       // checks that the booking is the owner's and already took place.
       Booking,
@@ -62,6 +65,7 @@ import { TrialRemindersService } from './api/trial-reminders.service';
     CronController,
     ReviewsController,
     PageStatsController,
+    InvitationsController,
   ],
   providers: [
     ProviderMarketplaceAdapter,

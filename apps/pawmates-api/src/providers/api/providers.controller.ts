@@ -24,17 +24,14 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Not, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Account } from '../../identity/domain/entities/account.entity';
 import { ProviderVerification } from '../../identity/domain/entities/provider-verification.entity';
 import {
   ProviderProfile,
   PUBLICLY_VISIBLE,
 } from '../domain/entities/provider-profile.entity';
-import {
-  SERVICE_CATEGORIES,
-  slugify,
-} from '../domain/value-objects/service-category';
+import { SERVICE_CATEGORIES } from '../domain/value-objects/service-category';
 import type { ServiceCategory } from '../domain/value-objects/service-category';
 import { SaveProviderProfileDto } from './dto/save-provider-profile.dto';
 import { SubmitVerificationDto } from './dto/submit-verification.dto';
@@ -48,6 +45,7 @@ import { Review } from '../domain/entities/review.entity';
 import { rankByRating } from '../domain/value-objects/review-ranking';
 import type { RatingSummary } from '../domain/value-objects/review-ranking';
 import { loadRatings, publicRating } from './ratings';
+import { resolveSlug } from './resolve-slug';
 import {
   LEGAL_DOCUMENT_VERSIONS,
   isCurrentVersion,
@@ -101,7 +99,10 @@ export class ProvidersController {
       this.reviews,
       listed.map((p) => p.accountId),
     );
-    const ranked = rankByRating(listed, (p) => ratings.get(p.accountId) ?? null);
+    const ranked = rankByRating(
+      listed,
+      (p) => ratings.get(p.accountId) ?? null,
+    );
     return {
       data: ranked.map((p) =>
         toDirectoryResponse(
@@ -244,7 +245,7 @@ export class ProvidersController {
     if (dto.design !== undefined) {
       profile.saveDesignDraft(await this.uploadDesignPhotos(dto.design));
     }
-    profile.slug = await this.resolveSlug(profile);
+    profile.slug = await resolveSlug(this.profiles, profile);
     await this.profiles.save(profile);
     return { data: toOwnResponse(profile) };
   }
@@ -283,25 +284,6 @@ export class ProvidersController {
       logo: await upload(design.logo),
       cover: await upload(design.cover),
     };
-  }
-
-  /**
-   * Keeps a business's /s/<slug> address stable once it exists: renaming
-   * the business doesn't move the page, because links already shared
-   * would break. Only assigns one when there isn't one yet, appending
-   * -2, -3… when another business already took the obvious slug.
-   */
-  private async resolveSlug(profile: ProviderProfile): Promise<string | null> {
-    if (profile.slug) return profile.slug;
-    if (!profile.businessName) return null;
-    const base = slugify(profile.businessName) || profile.accountId.slice(0, 8);
-    for (let attempt = 0; ; attempt++) {
-      const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`;
-      const clash = await this.profiles.findOne({
-        where: { slug: candidate, accountId: Not(profile.accountId) },
-      });
-      if (!clash) return candidate;
-    }
   }
 
   /** The shareable micro-page's own endpoint. Must be declared before
