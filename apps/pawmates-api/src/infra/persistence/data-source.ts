@@ -21,6 +21,7 @@ import { ProviderProfile } from '../../providers/domain/entities/provider-profil
 import { PlanActivationCode } from '../../providers/domain/entities/plan-activation-code.entity';
 import { ProviderPlanActivation } from '../../providers/domain/entities/provider-plan-activation.entity';
 import { Review } from '../../providers/domain/entities/review.entity';
+import { BusinessInvitation } from '../../providers/domain/entities/business-invitation.entity';
 import { libsqlConnectionOptions } from './libsql-connection';
 
 /**
@@ -44,6 +45,7 @@ const pawmatesDataSource = new DataSource({
     ProviderProfile,
     ProviderPlanActivation,
     Review,
+    BusinessInvitation,
     PlanActivationCode,
     Booking,
     BookingLine,
