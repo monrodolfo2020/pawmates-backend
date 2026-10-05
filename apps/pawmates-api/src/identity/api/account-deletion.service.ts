@@ -59,6 +59,8 @@ export const TABLES_ON_ACCOUNT_DELETION: Record<string, string> = {
   identity_legal_acceptances: 'kept: evidence of consent',
 
   // Not anyone's personal data.
+  providers_invitations:
+    "kept: the business's public details PET Conect@ prepared; who claimed it is cleared",
   providers_plan_codes: 'not personal: activation codes',
   booking_outbox_events: 'not personal: event log of booking changes',
   idempotency_keys:
@@ -212,6 +214,10 @@ export class AccountDeletionService {
     await manager.delete(Review, { providerId: accountId });
     await manager.query(
       `DELETE FROM providers_page_stats WHERE provider_id = ?`,
+      [accountId],
+    );
+    await manager.query(
+      `UPDATE providers_invitations SET claimed_by = NULL WHERE claimed_by = ?`,
       [accountId],
     );
     await manager.delete(Account, { id: accountId });
